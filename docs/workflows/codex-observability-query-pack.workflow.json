@@ -1,0 +1,127 @@
+{
+  "name": "Codex Observability Query Pack",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "4a7f1baf-8d6e-4f29-a3e9-6425977f55c8",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        280,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\n  json: {\n    title: 'Usage By Session',\n    visualization: 'table or bar chart',\n    sql: `SELECT session_id, COUNT(*) AS run_count, SUM(COALESCE(input_tokens, 0)) AS input_tokens, SUM(COALESCE(cached_input_tokens, 0)) AS cached_input_tokens, SUM(COALESCE(output_tokens, 0)) AS output_tokens, MAX(started_at) AS last_run_at FROM codex_runs WHERE session_id IS NOT NULL GROUP BY session_id ORDER BY last_run_at DESC LIMIT 100;`\n  }\n}];"
+      },
+      "id": "4402e9e0-0f5d-40d8-a3fd-5af50304e2ff",
+      "name": "Usage By Session SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\n  json: {\n    title: 'Tokens By Model',\n    visualization: 'stacked bar chart',\n    sql: `SELECT COALESCE(model, 'unknown') AS model, COUNT(*) AS run_count, SUM(COALESCE(input_tokens, 0)) AS input_tokens, SUM(COALESCE(output_tokens, 0)) AS output_tokens FROM codex_runs GROUP BY COALESCE(model, 'unknown') ORDER BY input_tokens DESC;`\n  }\n}];"
+      },
+      "id": "3775a4f4-27b2-4c6f-9024-0e11d652f2d3",
+      "name": "Tokens By Model SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\n  json: {\n    title: 'Failed Runs',\n    visualization: 'data table',\n    sql: `SELECT id, workflow_id, node_id, runtime, session_id, thread_id, error_message, started_at, ended_at FROM codex_runs WHERE status = 'failed' ORDER BY started_at DESC LIMIT 100;`\n  }\n}];"
+      },
+      "id": "5464b184-1e4d-42aa-9b08-c7533c0f7115",
+      "name": "Failed Runs SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\n  json: {\n    title: 'Recent Changed Files',\n    visualization: 'data table',\n    sql: `SELECT a.created_at, r.workflow_id, r.node_id, r.session_id, a.label, a.payload_json FROM codex_run_artifacts a INNER JOIN codex_runs r ON r.id = a.run_id WHERE a.kind = 'file_change' ORDER BY a.created_at DESC LIMIT 100;`\n  }\n}];"
+      },
+      "id": "df08e217-5479-4f09-a5ca-01511833470d",
+      "name": "Recent Changed Files SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{\n  json: {\n    title: 'Recent Shell Commands',\n    visualization: 'data table',\n    sql: `SELECT a.created_at, r.workflow_id, r.node_id, r.session_id, a.label, a.payload_json FROM codex_run_artifacts a INNER JOIN codex_runs r ON r.id = a.run_id WHERE a.kind = 'command' ORDER BY a.created_at DESC LIMIT 100;`\n  }\n}];"
+      },
+      "id": "153c42af-b88d-45a7-b4fd-9f37d451795c",
+      "name": "Recent Shell Commands SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        640
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Usage By Session SQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tokens By Model SQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Failed Runs SQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Recent Changed Files SQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Recent Shell Commands SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {},
+  "versionId": "5f1bc4fa-f87b-4f47-b7d7-0e2255c7c5aa",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

@@ -1,10 +1,11 @@
 **/.DS_Store
 
-# Local n8n runtime state
+# Host-local runtime and override files
 .env.local
 .env.*.local
 local/
 logs/
+tmp/
 
 # Workspace-local Codex state
 .codex/*
@@ -19,12 +20,4 @@ data/
 *.log
 
 # Node dependencies
-node_modules/
-
-# Root-level server management files stay local on each machine.
-/.env.local.example
-/CODEX_N8N_NODE.md
-/MAC_N8N_HOST_SETUP.md
-/package.json
-/package-lock.json
-/scripts/
+**/node_modules/
