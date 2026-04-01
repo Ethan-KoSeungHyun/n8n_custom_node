@@ -8,6 +8,7 @@ const {
 	parseStringList,
 	resolveCodexHome,
 	resolvePathMaybeRelative,
+	syncSavedAuthToCodexHome,
 } = require("./codex-cli");
 
 function coalesce(...values) {
@@ -49,6 +50,31 @@ function toConnectionArray(value) {
 	return [value];
 }
 
+function resolvePromptValue(rawPrompt, inputJson) {
+	if (typeof rawPrompt === "string" && rawPrompt.trim()) {
+		return rawPrompt.trim();
+	}
+
+	const candidate = [
+		inputJson?.chatInput,
+		inputJson?.prompt,
+		inputJson?.text,
+		inputJson?.query,
+		inputJson?.message,
+		inputJson?.input,
+	].find((value) => typeof value === "string" && value.trim());
+
+	if (candidate) {
+		return candidate.trim();
+	}
+
+	if (inputJson && Object.keys(inputJson).length > 0) {
+		return JSON.stringify(inputJson, null, 2);
+	}
+
+	return "";
+}
+
 async function getBaseNodeContext(context, itemIndex) {
 	const credentials = await context.getCredentials("codexCliApi", itemIndex);
 	const workspaceRoot = process.cwd();
@@ -64,6 +90,9 @@ async function getBaseNodeContext(context, itemIndex) {
 		workspaceRoot,
 	});
 	await ensureDirectory(codexHome);
+	if (stateScope === "workspaceScoped" && credentials.authMode === "saved") {
+		await syncSavedAuthToCodexHome(codexHome);
+	}
 
 	const extraEnv = parseJsonObjectOrEmpty(
 		context.getNodeParameter("extraEnvJson", itemIndex, ""),
@@ -276,6 +305,7 @@ module.exports = {
 	parseDelimitedPaths,
 	parseJsonObjectOrEmpty,
 	readCommonOptions,
+	resolvePromptValue,
 	resolveSessionIdField,
 	stringifyObjectValues,
 	toConnectionArray,

@@ -6,6 +6,8 @@ const { NodeConnectionTypes, NodeOperationError } = require("n8n-workflow");
 const { parseOptionalJsonArray, parseOptionalJsonObject } = require("./lib/codex-cli");
 const { parseDelimitedPaths } = require("./lib/node-runtime-helpers");
 
+const MCP_SERVER_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
 class CodexMcpToolset {
 	description = {
 		displayName: "Codex MCP Toolset",
@@ -164,11 +166,20 @@ class CodexMcpToolset {
 }
 
 function buildServerConfig(context, itemIndex) {
-	const serverName = context.getNodeParameter("serverName", itemIndex);
+	const serverName = String(
+		context.getNodeParameter("serverName", itemIndex),
+	).trim();
 	if (!serverName) {
 		throw new NodeOperationError(context.getNode(), "Server Name is required", {
 			itemIndex,
 		});
+	}
+	if (!MCP_SERVER_NAME_PATTERN.test(serverName)) {
+		throw new NodeOperationError(
+			context.getNode(),
+			`Server Name "${serverName}" is invalid. Use only letters, numbers, hyphens, and underscores.`,
+			{ itemIndex },
+		);
 	}
 
 	const serverSource = context.getNodeParameter("serverSource", itemIndex, "saved");

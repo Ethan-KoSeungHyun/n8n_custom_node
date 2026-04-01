@@ -10,6 +10,7 @@ const {
 	getConnectedCodexMemory,
 	getConnectedCodexToolsets,
 	readCommonOptions,
+	resolvePromptValue,
 	resolveSessionIdField,
 	toConnectionArray,
 } = require("./lib/node-runtime-helpers");
@@ -75,7 +76,8 @@ class CodexAgent {
 				name: "prompt",
 				type: "string",
 				typeOptions: { rows: 6 },
-				default: "={{ $json.chatInput || $json.prompt || '' }}",
+				default:
+					"={{ $json.chatInput || $json.prompt || $json.text || $json.message || $json.query || $json.input || '' }}",
 				required: true,
 				description: "The main user request or task sent to Codex",
 			},
@@ -214,6 +216,10 @@ class CodexAgent {
 					sessionStrategy === "specificThreadId"
 						? this.getNodeParameter("threadId", itemIndex, "")
 						: null;
+				const prompt = resolvePromptValue(
+					this.getNodeParameter("prompt", itemIndex, ""),
+					items[itemIndex]?.json,
+				);
 
 				const result = await executeAgentRun({
 					resource: "agent",
@@ -227,7 +233,7 @@ class CodexAgent {
 					codexHome: base.codexHome,
 					env: base.env,
 					workingDirectory: base.workingDirectory,
-					prompt: this.getNodeParameter("prompt", itemIndex),
+					prompt,
 					systemInstructions: this.getNodeParameter(
 						"systemInstructions",
 						itemIndex,

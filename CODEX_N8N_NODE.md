@@ -2,6 +2,8 @@
 
 This workspace now includes a small Codex-focused node stack for n8n under `custom/codex`.
 
+For the macOS host-based npm runtime flow, see `MAC_N8N_HOST_SETUP.md`.
+
 ## Included nodes
 
 - `Codex CLI`

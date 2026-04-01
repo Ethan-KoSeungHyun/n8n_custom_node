@@ -2,10 +2,12 @@
 
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
 const WORKSPACE_CODEX_HOME_SEGMENTS = ["data", "codex-home"];
+const DEFAULT_CODEX_HOME_DIRNAME = ".codex";
 
 function ensureObject(value, label) {
 	if (value === null || Array.isArray(value) || typeof value !== "object") {
@@ -82,6 +84,10 @@ function resolveCodexHome({ scope, customPath, workspaceRoot }) {
 	return path.join(workspaceRoot, ...WORKSPACE_CODEX_HOME_SEGMENTS);
 }
 
+function resolveSystemCodexHome() {
+	return path.join(os.homedir(), DEFAULT_CODEX_HOME_DIRNAME);
+}
+
 async function ensureDirectory(directoryPath) {
 	if (!directoryPath) {
 		return;
@@ -90,23 +96,62 @@ async function ensureDirectory(directoryPath) {
 	await fsp.mkdir(directoryPath, { recursive: true });
 }
 
+async function syncSavedAuthToCodexHome(codexHome) {
+	if (!codexHome) return false;
+
+	const sourcePath = path.join(resolveSystemCodexHome(), "auth.json");
+	const targetPath = path.join(codexHome, "auth.json");
+
+	if (sourcePath === targetPath) return false;
+	if (!fs.existsSync(sourcePath)) return false;
+	if (fs.existsSync(targetPath)) return false;
+
+	let sourceContent = "";
+	try {
+		sourceContent = await fsp.readFile(sourcePath, "utf8");
+	} catch {
+		return false;
+	}
+
+	await ensureDirectory(codexHome);
+	await fsp.writeFile(targetPath, sourceContent, { mode: 0o600 });
+	return true;
+}
+
 function resolveCodexExecutable(customExecutable) {
 	const candidates = [];
+	const isWindows = process.platform === "win32";
 
 	if (customExecutable) {
 		candidates.push(customExecutable);
 	}
 
-	if (process.env.APPDATA) {
+	if (process.env.CODEX_CLI_PATH) {
+		candidates.push(process.env.CODEX_CLI_PATH);
+	}
+
+	if (isWindows && process.env.APPDATA) {
 		candidates.push(path.join(process.env.APPDATA, "npm", "codex.cmd"));
 		candidates.push(path.join(process.env.APPDATA, "npm", "codex.exe"));
 	}
 
-	candidates.push("codex.cmd");
-	candidates.push("codex");
+	if (isWindows) {
+		candidates.push("codex.cmd");
+		candidates.push("codex.exe");
+		candidates.push("codex");
+	} else {
+		candidates.push("/opt/homebrew/bin/codex");
+		candidates.push("/usr/local/bin/codex");
+		candidates.push("codex");
+	}
 
 	for (const candidate of candidates) {
 		if (!candidate) {
+			continue;
+		}
+
+		const extension = path.extname(candidate).toLowerCase();
+		if (!isWindows && [".cmd", ".bat", ".exe"].includes(extension)) {
 			continue;
 		}
 
@@ -120,7 +165,7 @@ function resolveCodexExecutable(customExecutable) {
 		return candidate;
 	}
 
-	return "codex";
+	return isWindows ? "codex.cmd" : "codex";
 }
 
 function buildCommandError(executable, args, code, stdout, stderr) {
@@ -419,9 +464,11 @@ module.exports = {
 	parseStringList,
 	resolveCodexExecutable,
 	resolveCodexHome,
+	resolveSystemCodexHome,
 	resolvePathMaybeRelative,
 	runCodexCommand,
 	serializeConfigOverrides,
 	setConfigValue,
+	syncSavedAuthToCodexHome,
 	writeJsonFile,
 };

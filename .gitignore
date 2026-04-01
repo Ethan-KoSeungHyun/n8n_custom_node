@@ -1,0 +1,22 @@
+.DS_Store
+
+# Local n8n runtime state
+.env.local
+.env.*.local
+local/
+logs/
+
+# Workspace-local Codex state
+.codex/*
+!.codex/skills/
+!.codex/skills/**
+data/
+
+# SQLite and runtime logs
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Node dependencies used only for local host runtime support
+node_modules/
