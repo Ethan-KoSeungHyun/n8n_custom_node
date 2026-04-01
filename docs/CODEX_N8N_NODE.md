@@ -22,7 +22,7 @@ This repository ships a Codex-focused custom node stack for n8n under `custom/co
 
 ## Repository contract
 
-- This repo owns only the shared custom node source and shared docs.
+- This repo owns only the shared custom node source, its shared dependencies, and shared docs.
 - Each host keeps its own n8n runtime, `.env`, DB, logs, and process manager.
 - `Saved CLI Auth` is per host. Run `codex login` separately on Windows and Linux.
 - `CODEX_HOME` is host-local state and must not be committed.
@@ -155,6 +155,13 @@ Recommended field defaults:
 - `Ephemeral`: `true`
 
 ## Verification
+
+Install the shared custom-node dependencies from the shared repo root:
+
+```powershell
+cd /absolute/path/to/n8n_server_github
+npm install
+```
 
 After wiring `N8N_CUSTOM_EXTENSIONS` to this repository's `custom` directory, verify from the host runtime folder:
 

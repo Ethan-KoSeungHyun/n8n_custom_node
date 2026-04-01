@@ -1,13 +1,13 @@
 {
-  "name": "n8n-custom-codex-nodes",
+  "name": "n8n-shared-codex-custom-nodes",
   "private": true,
   "version": "0.1.0",
-  "description": "Shared Codex custom nodes for n8n",
+  "description": "Shared Codex custom nodes and docs for n8n hosts",
   "engines": {
     "node": ">=20.19 <25"
   },
   "scripts": {
-    "mcp:smoke:stdio": "node ./scripts/mcp-smoke-stdio-server.mjs"
+    "mcp:smoke:stdio": "node ./custom/codex/scripts/mcp-smoke-stdio-server.mjs"
   },
   "dependencies": {
     "@langchain/core": "1.1.31",

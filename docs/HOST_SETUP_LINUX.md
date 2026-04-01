@@ -7,13 +7,13 @@ This guide connects a Linux n8n runtime to the shared custom node repository clo
 Example:
 
 ```bash
-git clone <your-remote-url> /srv/n8n_server_github
+git clone <your-remote-url> /srv/N8N_SERVER/n8n_server_github
 ```
 
 ## 2. Install shared custom-node dependencies
 
 ```bash
-cd /srv/n8n_server_github/custom/codex
+cd /srv/N8N_SERVER/n8n_server_github
 npm install
 ```
 
@@ -22,7 +22,7 @@ npm install
 Set this in the Linux host's local `.env` or service environment:
 
 ```text
-N8N_CUSTOM_EXTENSIONS=/srv/n8n_server_github/custom
+N8N_CUSTOM_EXTENSIONS=/srv/N8N_SERVER/n8n_server_github/custom
 ```
 
 Keep the n8n runtime, DB, logs, and service-manager files outside the shared repo.

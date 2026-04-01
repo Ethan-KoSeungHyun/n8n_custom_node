@@ -1,11 +1,11 @@
 # Windows Host Setup
 
-This guide connects a Windows n8n runtime such as `D:\Project\N8N_SERVER` to the shared custom node repository at `D:\Project\n8n_server_github`.
+This guide connects a Windows n8n runtime such as `D:\Project\N8N_SERVER` to the shared custom node repository at `D:\Project\N8N_SERVER\n8n_server_github`.
 
 ## 1. Install shared custom-node dependencies
 
 ```powershell
-cd D:\Project\n8n_server_github\custom\codex
+cd D:\Project\N8N_SERVER\n8n_server_github
 npm install
 ```
 
@@ -14,7 +14,7 @@ npm install
 Set this in the Windows host's local `.env`:
 
 ```text
-N8N_CUSTOM_EXTENSIONS=D:\Project\n8n_server_github\custom
+N8N_CUSTOM_EXTENSIONS=D:/Project/N8N_SERVER/n8n_server_github/custom
 ```
 
 Keep the rest of the runtime-specific settings in the local runtime folder, not in this shared repo.
@@ -63,6 +63,6 @@ The export should include:
 ## 6. Recommended runtime split
 
 - `D:\Project\N8N_SERVER`: n8n runtime, DB, logs, local scripts, local state
-- `D:\Project\n8n_server_github`: shared custom node source and docs only
+- `D:\Project\N8N_SERVER\n8n_server_github`: shared custom node source, shared dependencies, and docs
 
 Make changes to custom nodes only in the shared repo.

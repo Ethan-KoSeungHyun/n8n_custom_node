@@ -5,7 +5,7 @@ This repository is the shared source of truth for the Codex custom nodes used by
 ## What lives here
 
 - `custom/codex/**`
-- shared custom-node dependency manifest in `custom/codex/package.json`
+- shared custom-node dependency manifest in `package.json`
 - shared docs under `docs/**`
 - shared workflow templates under `docs/workflows/**`
 
@@ -29,7 +29,7 @@ N8N_CUSTOM_EXTENSIONS=/absolute/path/to/this/repo/custom
 Then install the shared custom-node dependencies once on that host:
 
 ```bash
-cd custom/codex
+cd /absolute/path/to/n8n_server_github
 npm install
 ```
 
@@ -44,8 +44,9 @@ npm install
 ## Repo layout
 
 ```text
-custom/codex/    Shared node source, runtime, store, observability, package manifest
+custom/codex/    Shared node source, runtime, store, and observability modules
 docs/            Shared operating docs
+package.json     Shared custom-node dependency manifest
 ```
 
 Keep runtime-specific scripts in each host repository or server, not here.

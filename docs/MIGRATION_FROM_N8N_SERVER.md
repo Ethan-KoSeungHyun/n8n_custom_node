@@ -1,12 +1,12 @@
 # Migration From `N8N_SERVER/custom`
 
-This guide moves a Windows runtime from a local `D:\Project\N8N_SERVER\custom` folder to the shared repository at `D:\Project\n8n_server_github\custom`.
+This guide moves a Windows runtime from a local `D:\Project\N8N_SERVER\custom` folder to the nested shared repository at `D:\Project\N8N_SERVER\n8n_server_github\custom`.
 
 ## Goal
 
 After migration:
 
-- custom node source is edited only in `D:\Project\n8n_server_github`
+- custom node source is edited only in `D:\Project\N8N_SERVER\n8n_server_github`
 - `D:\Project\N8N_SERVER` stays the local runtime folder
 - `N8N_CUSTOM_EXTENSIONS` points to the shared repo
 
@@ -21,7 +21,7 @@ Rename-Item D:\Project\N8N_SERVER\custom custom.bak
 2. Update the local runtime `.env`:
 
 ```text
-N8N_CUSTOM_EXTENSIONS=D:\Project\n8n_server_github\custom
+N8N_CUSTOM_EXTENSIONS=D:/Project/N8N_SERVER/n8n_server_github/custom
 ```
 
 3. Keep local runtime files local:
@@ -38,7 +38,7 @@ N8N_CUSTOM_EXTENSIONS=D:\Project\n8n_server_github\custom
 4. Install or update shared custom dependencies:
 
 ```powershell
-cd D:\Project\n8n_server_github\custom\codex
+cd D:\Project\N8N_SERVER\n8n_server_github
 npm install
 ```
 
