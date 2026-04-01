@@ -1,4 +1,4 @@
-.DS_Store
+**/.DS_Store
 
 # Local n8n runtime state
 .env.local
@@ -18,5 +18,13 @@ data/
 *.db
 *.log
 
-# Node dependencies used only for local host runtime support
+# Node dependencies
 node_modules/
+
+# Root-level server management files stay local on each machine.
+/.env.local.example
+/CODEX_N8N_NODE.md
+/MAC_N8N_HOST_SETUP.md
+/package.json
+/package-lock.json
+/scripts/

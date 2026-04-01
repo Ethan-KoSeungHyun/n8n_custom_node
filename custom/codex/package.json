@@ -1,0 +1,18 @@
+{
+  "name": "n8n-custom-codex-nodes",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shared Codex custom nodes for n8n",
+  "engines": {
+    "node": ">=20.19 <25"
+  },
+  "scripts": {
+    "mcp:smoke:stdio": "node ./scripts/mcp-smoke-stdio-server.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "1.1.31",
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@openai/codex-sdk": "0.117.0",
+    "zod": "^4.3.6"
+  }
+}
