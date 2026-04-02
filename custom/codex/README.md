@@ -1,8 +1,8 @@
-# Codex Custom Nodes
+# Codex 커스텀 노드
 
-This folder contains the Git-shared Codex custom node source for n8n.
+이 폴더는 n8n용 Codex 커스텀 노드의 Git 공유 소스 코드가 들어 있는 위치입니다.
 
-## Shared in this folder
+## 이 폴더에 포함되는 것
 
 - `*.node.js`
 - `*.credentials.js`
@@ -11,39 +11,46 @@ This folder contains the Git-shared Codex custom node source for n8n.
 - `store/**`
 - `observability/**`
 - `scripts/**`
-- no package manifest lives here by design
+- 의도적으로 로컬 패키지 매니페스트는 두지 않음
 
-## Install on each host
+## 각 호스트에서 설치하는 방법
 
-Install dependencies from the shared repository root:
+의존성은 공유 저장소 루트에서 설치합니다.
 
 ```bash
 cd ../../
 npm install
 ```
 
-The host n8n runtime should point `N8N_CUSTOM_EXTENSIONS` at the repository's `custom` directory.
+호스트 n8n 런타임은 `N8N_CUSTOM_EXTENSIONS`가 이 저장소의 `custom` 디렉터리를 가리키도록 설정해야 합니다.
 
-## Docs
+## 관련 문서
 
-- repository overview: `../../README.md`
-- shared node guide: `../../docs/CODEX_N8N_NODE.md`
-- Windows host setup: `../../docs/HOST_SETUP_WINDOWS.md`
-- Linux host setup: `../../docs/HOST_SETUP_LINUX.md`
-- migration guide: `../../docs/MIGRATION_FROM_N8N_SERVER.md`
+- 저장소 개요: `../../README.md`
+- 공용 노드 가이드: `../../docs/CODEX_N8N_NODE.md`
+- Windows 호스트 설정: `../../docs/HOST_SETUP_WINDOWS.md`
+- Linux 호스트 설정: `../../docs/HOST_SETUP_LINUX.md`
+- 마이그레이션 가이드: `../../docs/MIGRATION_FROM_N8N_SERVER.md`
 
-## Why there is no local node_modules here
+## 왜 여기에는 local node_modules가 없는가
 
-Do not run `npm install` inside `custom/codex`.
+`custom/codex` 안에서 `npm install`을 실행하지 마세요.
 
-If `custom/codex/node_modules` exists, n8n can accidentally scan dependency files while loading custom nodes and fail at startup. Keeping the dependency tree at the repository root avoids that collision.
+`custom/codex/node_modules`가 생기면, n8n이 커스텀 노드를 로드하는 동안 의존성 파일까지 잘못 스캔해서 시작 단계에서 실패할 수 있습니다. 의존성 트리를 저장소 루트에만 두면 이 충돌을 피할 수 있습니다.
 
-## What stays outside this folder
+## 현재 제공되는 노드
 
-Each host keeps its own:
+- `Codex Agent`
+- `Codex Agent Tool`
+- `Codex Memory`
+- `Codex MCP Toolset`
 
-- n8n runtime
-- `.env` and `.npmrc`
-- DB, logs, `data/`, `tmp/`, workflow exports
-- `CODEX_HOME` and saved auth
-- process-manager config and certificates
+## 이 폴더 바깥에서 관리해야 하는 것
+
+각 호스트는 아래 항목을 자체적으로 관리합니다.
+
+- n8n 런타임
+- `.env`와 `.npmrc`
+- DB, 로그, `data/`, `tmp/`, 워크플로우 내보내기 파일
+- `CODEX_HOME`과 저장된 인증 정보
+- 프로세스 매니저 설정과 인증서

@@ -12,12 +12,15 @@ const {
 } = require("n8n-workflow");
 const { executeAgentRun } = require("./runtime/codex-service");
 const {
+	assertSavedMcpServerConfig,
 	buildCodexMcpConfig,
+	describeConfiguredMcpToolsets,
 	getBaseNodeContext,
 	getConnectedCodexMemory,
 	getConnectedCodexToolsets,
 	parseJsonObjectOrEmpty,
 	readCommonOptions,
+	resolveModelField,
 	resolveSessionIdField,
 } = require("./lib/node-runtime-helpers");
 
@@ -61,7 +64,7 @@ class CodexAgentTool {
 		],
 		outputs: [NodeConnectionTypes.AiTool],
 		outputNames: ["Tool"],
-		credentials: [{ name: "codexCliApi", required: true }],
+		credentials: [{ name: "codexApi", required: true }],
 		properties: [
 			{
 				displayName:
@@ -98,25 +101,63 @@ class CodexAgentTool {
 					"Optional persistent instructions for how this Codex tool should behave when called by a parent agent",
 			},
 			{
-				displayName: "Model",
+				displayName: "Model Preset",
+				name: "modelPreset",
+				type: "options",
+				default: "",
+				description:
+					"Choose a common Codex/OpenAI coding model preset. Use Custom Override for legacy or manually specified model names",
+				options: [
+					{
+						name: "Default (Environment Default)",
+						value: "",
+					},
+					{
+						name: "GPT-5.4 (Current)",
+						value: "gpt-5.4",
+					},
+					{
+						name: "GPT-5.4 Mini",
+						value: "gpt-5.4-mini",
+					},
+					{
+						name: "GPT-5.3 Codex",
+						value: "gpt-5.3-codex",
+					},
+					{
+						name: "GPT-5.2 Codex",
+						value: "gpt-5.2-codex",
+					},
+					{
+						name: "GPT-5.2",
+						value: "gpt-5.2",
+					},
+					{
+						name: "GPT-5.1 Codex Max",
+						value: "gpt-5.1-codex-max",
+					},
+					{
+						name: "GPT-5.1 Codex Mini",
+						value: "gpt-5.1-codex-mini",
+					},
+					{
+						name: "Custom Override",
+						value: "__custom__",
+					},
+				],
+			},
+			{
+				displayName: "Custom Model",
 				name: "model",
 				type: "string",
 				default: "",
 				description:
-					'Optional model override. Leave empty to use the environment default',
-			},
-			{
-				displayName: "Runtime",
-				name: "runtimeMode",
-				type: "options",
-				default: "auto",
-				options: [
-					{ name: "Auto (CLI First)", value: "auto" },
-					{ name: "CLI", value: "cli" },
-					{ name: "SDK", value: "sdk" },
-				],
-				description:
-					"Auto is the safest default. Choose SDK only when you specifically want the SDK execution path",
+					"Only used when Model Preset is set to Custom Override, or to preserve older workflows that already stored a manual model value",
+				displayOptions: {
+					show: {
+						modelPreset: ["__custom__"],
+					},
+				},
 			},
 			{
 				displayName: "State Scope",
@@ -272,7 +313,9 @@ function createTool(context, itemIndex, log = true) {
 			const base = await getBaseNodeContext(context, itemIndex);
 			const options = readCommonOptions(context, itemIndex);
 			const toolsets = await getConnectedCodexToolsets(context);
+			const mcpConfigured = describeConfiguredMcpToolsets(toolsets);
 			const memory = await getConnectedCodexMemory(context);
+			assertSavedMcpServerConfig(toolsets, base.codexHome);
 			const sessionStrategy = context.getNodeParameter(
 				"sessionStrategy",
 				itemIndex,
@@ -303,8 +346,6 @@ function createTool(context, itemIndex, log = true) {
 			const result = await executeAgentRun({
 				resource: "agent",
 				operation: "exec",
-				runtimeMode: context.getNodeParameter("runtimeMode", itemIndex, "auto"),
-				defaultRuntime: "cli",
 				workflowId: base.workflowId,
 				nodeId: base.nodeId,
 				executionId: base.executionId,
@@ -314,14 +355,15 @@ function createTool(context, itemIndex, log = true) {
 				workingDirectory: base.workingDirectory,
 				prompt: query.prompt,
 				systemInstructions: effectiveSystemInstructions,
-				model: context.getNodeParameter("model", itemIndex, ""),
+				model: resolveModelField(context, itemIndex),
 				options,
 				sessionStrategy,
 				sessionId,
 				threadId,
 				resumeLast: sessionStrategy === "lastThread",
 				memory,
-				codexConfig: buildCodexMcpConfig(toolsets),
+				mcpConfigured,
+				codexConfig: buildCodexMcpConfig(toolsets, base.codexHome),
 			});
 
 			const parsedOutput =
@@ -338,8 +380,19 @@ function createTool(context, itemIndex, log = true) {
 				sessionId: result.sessionId,
 				runtime: result.runtime,
 				usage: result.usage || null,
+				eventPayloadDetail: result.eventPayloadDetail || "summary",
 				storedEventCount: result.storedEventCount,
 				artifactsSummary: result.artifactsSummary,
+				eventTypes: result.eventTypes || {},
+				mcpConfigured: result.mcpConfigured || null,
+				usedMcpServers: result.usedMcpServers || [],
+				unusedMcpServers: result.unusedMcpServers || [],
+				mcpCalls: result.mcpCalls || [],
+				commands: result.commands || [],
+				fileChanges: result.fileChanges || [],
+				progressTimeline: result.progressTimeline || [],
+				contextPressure: result.contextPressure || null,
+				recommendedAction: result.recommendedAction || null,
 				parsed: parsedOutput,
 			};
 		} catch (error) {
@@ -499,7 +552,38 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Execution events are always stored internally; turn this on only if you also want them returned in tool output",
+				'Add raw SDK thread events to the returned tool payload for debugging. This does not populate n8n\'s Logs panel; it only changes the returned output.',
+		},
+		{
+			displayName: "Event Payload Detail",
+			name: "eventPayloadDetail",
+			type: "options",
+			default: "summary",
+			description:
+				'Controls whether the "events" output contains lightweight previews or the full raw event payloads',
+			options: [
+				{ name: "Summary", value: "summary" },
+				{ name: "Full Raw Payload", value: "full" },
+			],
+			displayOptions: {
+				show: {
+					includeEvents: [true],
+				},
+			},
+		},
+		{
+			displayName: "Event Content Max Length",
+			name: "eventContentMaxLength",
+			type: "number",
+			default: 400,
+			description:
+				"When Event Payload Detail is Summary, long event text and MCP payloads are truncated to this length",
+			displayOptions: {
+				show: {
+					includeEvents: [true],
+					eventPayloadDetail: ["summary"],
+				},
+			},
 		},
 		{
 			displayName: "Streaming",
@@ -507,7 +591,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"When SDK runtime is used, collect streamed events internally before returning the final tool result",
+				"Use the SDK streaming path. When the current n8n execution UI supports live chunks, assistant text can stream during the run; otherwise the stream is still collected internally and returned at the end.",
 		},
 		{
 			displayName: "Skip Git Repo Check",
@@ -516,14 +600,6 @@ function buildToolOptionFields() {
 			default: false,
 			description:
 				"Leave off for normal use. Non-Git working directories are auto-detected and skipped automatically; enable only to force the bypass",
-		},
-		{
-			displayName: "Danger Bypass",
-			name: "dangerBypass",
-			type: "boolean",
-			default: false,
-			description:
-				"Bypass normal safety gates in the CLI path. Use only in tightly controlled environments",
 		},
 		{
 			displayName: "Enable Network Access",
@@ -591,7 +667,7 @@ function buildToolOptionFields() {
 			typeOptions: { rows: 6 },
 			default: "",
 			description:
-				"Compatibility escape hatch for older Codex CLI node options",
+				"Compatibility escape hatch for older Codex node options",
 		},
 		{
 			displayName: "Extra Environment JSON",

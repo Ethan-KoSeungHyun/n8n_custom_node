@@ -1,7 +1,7 @@
 "use strict";
 
 const path = require("node:path");
-const { parseJsonOutput } = require("../lib/codex-cli");
+const { parseJsonOutput } = require("../lib/codex-utils");
 const {
 	buildCodexConfig,
 	buildPrompt,
@@ -81,27 +81,45 @@ async function runSdkAgent(request) {
 		: client.startThread(threadOptions);
 
 	if (request.options.streaming) {
-		const streamed = await thread.runStreamed(prompt, {
-			outputSchema:
-				request.options.outputSchema &&
-				Object.keys(request.options.outputSchema).length > 0
-					? request.options.outputSchema
-					: undefined,
-		});
+		await request.hooks?.onStreamBegin?.();
 		const events = [];
-		for await (const event of streamed.events) {
-			events.push(event);
+		try {
+			const streamed = await thread.runStreamed(prompt, {
+				outputSchema:
+					request.options.outputSchema &&
+					Object.keys(request.options.outputSchema).length > 0
+						? request.options.outputSchema
+						: undefined,
+			});
+			for await (const event of streamed.events) {
+				events.push(event);
+				await request.hooks?.onEvent?.(event);
+			}
+		} finally {
+			await request.hooks?.onStreamEnd?.();
 		}
 
 		let finalResponse = "";
 		let usage = null;
+		let turnFailure = null;
 		for (const event of events) {
-			if (event.type === "item.completed" && event.item?.type === "agent_message") {
+			if (
+				(event.type === "item.updated" || event.type === "item.completed") &&
+				event.item?.type === "agent_message"
+			) {
 				finalResponse = event.item.text;
 			}
 			if (event.type === "turn.completed") {
 				usage = event.usage;
 			}
+			if (event.type === "turn.failed") {
+				turnFailure = event.error;
+				break;
+			}
+		}
+
+		if (turnFailure) {
+			throw new Error(turnFailure.message);
 		}
 
 		return {

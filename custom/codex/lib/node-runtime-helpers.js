@@ -1,5 +1,6 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { NodeConnectionTypes } = require("n8n-workflow");
 const {
@@ -9,7 +10,7 @@ const {
 	resolveCodexHome,
 	resolvePathMaybeRelative,
 	syncSavedAuthToCodexHome,
-} = require("./codex-cli");
+} = require("./codex-utils");
 
 function coalesce(...values) {
 	for (const value of values) {
@@ -76,7 +77,15 @@ function resolvePromptValue(rawPrompt, inputJson) {
 }
 
 async function getBaseNodeContext(context, itemIndex) {
-	const credentials = await context.getCredentials("codexCliApi", itemIndex);
+	const rawCredentials = await context.getCredentials("codexApi", itemIndex);
+	const credentials = {
+		...rawCredentials,
+		codexExecutable:
+			rawCredentials.codexExecutable ||
+			process.env.CODEX_BINARY_PATH ||
+			process.env.CODEX_EXECUTABLE_PATH ||
+			"",
+	};
 	const workspaceRoot = process.cwd();
 	const stateScope = context.getNodeParameter("stateScope", itemIndex, "workspaceScoped");
 	const customCodexHome = context.getNodeParameter(
@@ -175,6 +184,17 @@ function readCommonOptions(context, itemIndex) {
 			context.getNodeParameter("includeEvents", itemIndex, false),
 			legacyOptions.includeEvents,
 		),
+		eventPayloadDetail: coalesce(
+			context.getNodeParameter("eventPayloadDetail", itemIndex, "summary"),
+			legacyOptions.eventPayloadDetail,
+			"summary",
+		),
+		eventContentMaxLength:
+			Number(
+				context.getNodeParameter("eventContentMaxLength", itemIndex, 400),
+			) ||
+			legacyOptions.eventContentMaxLength ||
+			400,
 		ephemeral: coerceBoolean(
 			context.getNodeParameter("ephemeral", itemIndex, false),
 			legacyOptions.ephemeral,
@@ -225,15 +245,26 @@ function readCommonOptions(context, itemIndex) {
 		),
 		networkAccessEnabled:
 			context.getNodeParameter("networkAccessEnabled", itemIndex, undefined),
-		dangerBypass: coerceBoolean(
-			context.getNodeParameter("dangerBypass", itemIndex, false),
-			legacyOptions.dangerBypass,
-		),
 	};
 }
 
 function resolveSessionIdField(context, itemIndex, fieldName = "sessionId") {
 	return String(context.getNodeParameter(fieldName, itemIndex, "") || "").trim();
+}
+
+function resolveModelField(context, itemIndex, fallbackFieldName = "model") {
+	const preset = String(
+		context.getNodeParameter("modelPreset", itemIndex, ""),
+	).trim();
+	const customValue = String(
+		context.getNodeParameter(fallbackFieldName, itemIndex, "") || "",
+	).trim();
+
+	if (preset === "__custom__") {
+		return customValue;
+	}
+
+	return preset || customValue || "";
 }
 
 async function getConnectedCodexMemory(context) {
@@ -257,19 +288,24 @@ function buildCodexMcpConfig(toolsets) {
 		for (const server of toolset.servers || []) {
 			const entry = {};
 			if (server.required !== undefined) entry.required = Boolean(server.required);
-			if (server.timeout) entry.tool_timeout_sec = Number(server.timeout);
+			if (server.timeout) {
+				entry.tool_timeout_sec = Number(server.timeout);
+				entry.startup_timeout_sec = Number(server.timeout);
+			}
 			if (Array.isArray(server.includeTools) && server.includeTools.length > 0) {
-				entry.include_tools = server.includeTools;
+				entry.enabled_tools = server.includeTools;
 			}
 			if (Array.isArray(server.excludeTools) && server.excludeTools.length > 0) {
-				entry.exclude_tools = server.excludeTools;
+				entry.disabled_tools = server.excludeTools;
 			}
 			if (server.serverSource === "http") {
+				entry.transport = "streamable_http";
 				entry.url = server.serverUrl;
 				if (server.bearerTokenEnvVar) {
 					entry.bearer_token_env_var = server.bearerTokenEnvVar;
 				}
 			} else if (server.serverSource === "stdio") {
+				entry.transport = "stdio";
 				entry.command = server.stdioCommand;
 				entry.args = server.stdioArgs || [];
 				entry.env = server.commandEnv || {};
@@ -288,6 +324,72 @@ function buildCodexMcpConfig(toolsets) {
 	};
 }
 
+function describeConfiguredMcpToolsets(toolsets) {
+	const servers = [];
+
+	for (const toolset of Array.isArray(toolsets) ? toolsets : []) {
+		for (const server of toolset.servers || []) {
+			servers.push({
+				serverName: server.serverName,
+				serverSource: server.serverSource,
+				required: Boolean(server.required),
+				timeout: server.timeout ?? null,
+				includeTools: Array.isArray(server.includeTools)
+					? server.includeTools
+					: [],
+				excludeTools: Array.isArray(server.excludeTools)
+					? server.excludeTools
+					: [],
+			});
+		}
+	}
+
+	return {
+		serverCount: servers.length,
+		servers,
+		toolsetNodesAreConfigurationOnly: true,
+		runtimeEventsAppearOn: "Codex Agent",
+	};
+}
+
+function assertSavedMcpServerConfig(toolsets, codexHome) {
+	for (const toolset of Array.isArray(toolsets) ? toolsets : []) {
+		for (const server of toolset.servers || []) {
+			if (server.serverSource !== "saved") continue;
+
+			const misusedToolPath = [...(server.includeTools || []), ...(server.excludeTools || [])]
+				.find((entry) =>
+					typeof entry === "string" &&
+					(/[\\/]/.test(entry) || /\.[a-z0-9]+$/i.test(entry)),
+				);
+			if (misusedToolPath) {
+				throw new Error(
+					`Saved CODEX_HOME Server "${server.serverName}" expects MCP tool names in Include/Exclude Tools, not a file path like "${misusedToolPath}". If you want to launch D:/.../dist/index.js directly, use Inline stdio Server instead.`,
+				);
+			}
+
+			const configPath = path.join(codexHome || "", "config.toml");
+			if (!codexHome || !fs.existsSync(configPath)) {
+				throw new Error(
+					`Saved CODEX_HOME Server "${server.serverName}" requires a pre-registered MCP server in ${configPath}. That file was not found. Use Inline stdio Server, Inline HTTP Server, or register the server in this CODEX_HOME first.`,
+				);
+			}
+
+			const configText = fs.readFileSync(configPath, "utf8");
+			const escapedName = server.serverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			const sectionPattern = new RegExp(
+				`^\\s*\\[mcp_servers\\.${escapedName}\\]\\s*$`,
+				"m",
+			);
+			if (!sectionPattern.test(configText)) {
+				throw new Error(
+					`Saved CODEX_HOME Server "${server.serverName}" was selected, but ${configPath} does not contain an [mcp_servers.${server.serverName}] entry. Register it first or switch this node to Inline stdio Server.`,
+				);
+			}
+		}
+	}
+}
+
 function stringifyObjectValues(input) {
 	const result = {};
 	for (const [key, value] of Object.entries(input)) {
@@ -298,13 +400,16 @@ function stringifyObjectValues(input) {
 
 module.exports = {
 	buildCodexMcpConfig,
+	describeConfiguredMcpToolsets,
 	coerceBoolean,
 	getBaseNodeContext,
 	getConnectedCodexMemory,
 	getConnectedCodexToolsets,
+	assertSavedMcpServerConfig,
 	parseDelimitedPaths,
 	parseJsonObjectOrEmpty,
 	readCommonOptions,
+	resolveModelField,
 	resolvePromptValue,
 	resolveSessionIdField,
 	stringifyObjectValues,

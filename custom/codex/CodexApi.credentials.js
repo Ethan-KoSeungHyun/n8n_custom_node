@@ -1,11 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CodexCliApi = void 0;
+exports.CodexApi = void 0;
 
-class CodexCliApi {
-	name = "codexCliApi";
+class CodexApi {
+	name = "codexApi";
 
-	displayName = "Codex CLI";
+	displayName = "Codex";
 
 	documentationUrl = "https://developers.openai.com/codex/auth";
 
@@ -15,10 +15,10 @@ class CodexCliApi {
 			name: "authMode",
 			type: "options",
 			default: "saved",
-			description: "Use stored Codex auth or inject an API key for workflow runs",
+			description: "Use saved Codex auth or inject an API key for workflow runs",
 			options: [
 				{
-					name: "Saved CLI Auth",
+					name: "Saved Codex Auth",
 					value: "saved",
 					description:
 						"Use the auth already stored in the selected CODEX_HOME directory",
@@ -27,7 +27,7 @@ class CodexCliApi {
 					name: "API Key",
 					value: "apiKey",
 					description:
-						"Inject an API key for exec/review and optionally persist it with Auth > Login with API Key",
+						"Inject an API key for SDK-based Codex runs without relying on saved auth",
 				},
 			],
 		},
@@ -63,14 +63,14 @@ class CodexCliApi {
 				"Optional PEM bundle path passed as CODEX_CA_CERTIFICATE for corporate/private CAs",
 		},
 		{
-			displayName: "Codex Executable Path",
+			displayName: "Codex Executable Path (Optional)",
 			name: "codexExecutable",
 			type: "string",
 			default: "",
 			description:
-				"Optional absolute path to the Codex CLI executable, for example codex, codex.exe, or codex.cmd. Leave empty to auto-detect it",
+				"Optional absolute path to the Codex binary used by the SDK. Leave empty to use the bundled platform binary",
 		},
 	];
 }
 
-exports.CodexCliApi = CodexCliApi;
+exports.CodexApi = CodexApi;

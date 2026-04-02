@@ -5,15 +5,23 @@ exports.CodexAgent = void 0;
 const { NodeConnectionTypes, NodeOperationError } = require("n8n-workflow");
 const { executeAgentRun } = require("./runtime/codex-service");
 const {
+	assertSavedMcpServerConfig,
 	buildCodexMcpConfig,
+	describeConfiguredMcpToolsets,
 	getBaseNodeContext,
 	getConnectedCodexMemory,
 	getConnectedCodexToolsets,
 	readCommonOptions,
+	resolveModelField,
 	resolvePromptValue,
 	resolveSessionIdField,
 	toConnectionArray,
 } = require("./lib/node-runtime-helpers");
+const {
+	addCodexExecutionHints,
+	createCodexUiHooks,
+	emitCodexResultToUi,
+} = require("./lib/node-ui-helpers");
 
 class CodexAgent {
 	description = {
@@ -55,7 +63,7 @@ class CodexAgent {
 			},
 		],
 		outputs: [NodeConnectionTypes.Main],
-		credentials: [{ name: "codexCliApi", required: true }],
+		credentials: [{ name: "codexApi", required: true }],
 		properties: [
 			{
 				displayName:
@@ -66,8 +74,15 @@ class CodexAgent {
 			},
 			{
 				displayName:
-					"Codex Agent is the main conversational node. Connect Codex Memory for session continuity and Codex MCP Toolset for MCP servers.",
+					"Codex Agent is the main SDK-based conversational node. Connect Codex Memory for session continuity and Codex MCP Toolset for MCP servers.",
 				name: "memoryAndToolNotice",
+				type: "notice",
+				default: "",
+			},
+			{
+				displayName:
+					'Live streaming in n8n chat requires the upstream "When chat message received" trigger to use Response Mode = Streaming. If the chat workflow runs in Last Node or Response Nodes mode, Codex still streams internally but the UI only renders the final result.',
+				name: "streamingModeNotice",
 				type: "notice",
 				default: "",
 			},
@@ -91,25 +106,63 @@ class CodexAgent {
 					"Optional persistent guidance applied before the prompt, for example response style or task boundaries",
 			},
 			{
-				displayName: "Model",
+				displayName: "Model Preset",
+				name: "modelPreset",
+				type: "options",
+				default: "",
+				description:
+					"Choose a common Codex/OpenAI coding model preset. Use Custom Override for legacy or manually specified model names",
+				options: [
+					{
+						name: "Default (Environment Default)",
+						value: "",
+					},
+					{
+						name: "GPT-5.4 (Current)",
+						value: "gpt-5.4",
+					},
+					{
+						name: "GPT-5.4 Mini",
+						value: "gpt-5.4-mini",
+					},
+					{
+						name: "GPT-5.3 Codex",
+						value: "gpt-5.3-codex",
+					},
+					{
+						name: "GPT-5.2 Codex",
+						value: "gpt-5.2-codex",
+					},
+					{
+						name: "GPT-5.2",
+						value: "gpt-5.2",
+					},
+					{
+						name: "GPT-5.1 Codex Max",
+						value: "gpt-5.1-codex-max",
+					},
+					{
+						name: "GPT-5.1 Codex Mini",
+						value: "gpt-5.1-codex-mini",
+					},
+					{
+						name: "Custom Override",
+						value: "__custom__",
+					},
+				],
+			},
+			{
+				displayName: "Custom Model",
 				name: "model",
 				type: "string",
 				default: "",
 				description:
-					'Optional model override. Leave empty to use the Codex default for this environment',
-			},
-			{
-				displayName: "Runtime",
-				name: "runtimeMode",
-				type: "options",
-				default: "auto",
-				options: [
-					{ name: "Auto (CLI First)", value: "auto" },
-					{ name: "CLI", value: "cli" },
-					{ name: "SDK", value: "sdk" },
-				],
-				description:
-					"Auto is the safest default. Choose SDK if you specifically want the newer SDK execution path",
+					"Only used when Model Preset is set to Custom Override, or to preserve older workflows that already stored a manual model value",
+				displayOptions: {
+					show: {
+						modelPreset: ["__custom__"],
+					},
+				},
 			},
 			{
 				displayName: "State Scope",
@@ -193,8 +246,11 @@ class CodexAgent {
 			try {
 				const base = await getBaseNodeContext(this, itemIndex);
 				const options = readCommonOptions(this, itemIndex);
+				const uiState = createCodexUiHooks(this, itemIndex, options);
 				const toolsets = await getConnectedCodexToolsets(this);
+				const mcpConfigured = describeConfiguredMcpToolsets(toolsets);
 				const memory = await getConnectedCodexMemory(this);
+				assertSavedMcpServerConfig(toolsets, base.codexHome);
 				const connectedTools = toConnectionArray(
 					await this.getInputConnectionData(NodeConnectionTypes.AiTool, 0),
 				);
@@ -224,8 +280,6 @@ class CodexAgent {
 				const result = await executeAgentRun({
 					resource: "agent",
 					operation: "exec",
-					runtimeMode: this.getNodeParameter("runtimeMode", itemIndex, "auto"),
-					defaultRuntime: "cli",
 					workflowId: base.workflowId,
 					nodeId: base.nodeId,
 					executionId: base.executionId,
@@ -239,15 +293,24 @@ class CodexAgent {
 						itemIndex,
 						"",
 					),
-					model: this.getNodeParameter("model", itemIndex, ""),
+					model: resolveModelField(this, itemIndex),
 					options,
 					sessionStrategy,
 					sessionId,
 					threadId,
 					resumeLast: sessionStrategy === "lastThread",
 					memory,
-					codexConfig: buildCodexMcpConfig(toolsets),
+					mcpConfigured,
+					codexConfig: buildCodexMcpConfig(toolsets, base.codexHome),
+					hooks: uiState.hooks,
 				});
+				emitCodexResultToUi(this, result);
+				addCodexExecutionHints(
+					this,
+					options,
+					result,
+					uiState.liveStreamingEnabled,
+				);
 
 				returnData.push({
 					json: {
@@ -256,6 +319,11 @@ class CodexAgent {
 						codexHome: base.codexHome || null,
 						workingDirectory: base.workingDirectory,
 						ignoredToolCount,
+						streamingRequested: Boolean(options.streaming),
+						liveStreamingActive: uiState.liveStreamingEnabled,
+						chatResponseMode: uiState.chatResponseMode,
+						liveStreamingReason: uiState.liveStreamingReason,
+						eventsIncludedInOutput: Boolean(options.includeEvents),
 						...result,
 					},
 					pairedItem: { item: itemIndex },
@@ -362,7 +430,38 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Execution events are always stored internally; turn this on only if you also want them in node output",
+				'Add raw SDK thread events to this node\'s Output JSON for debugging. This does not populate n8n\'s Logs panel; it only changes the returned output.',
+		},
+		{
+			displayName: "Event Payload Detail",
+			name: "eventPayloadDetail",
+			type: "options",
+			default: "summary",
+			description:
+				'Controls whether the "events" output contains lightweight previews or the full raw event payloads',
+			options: [
+				{ name: "Summary", value: "summary" },
+				{ name: "Full Raw Payload", value: "full" },
+			],
+			displayOptions: {
+				show: {
+					includeEvents: [true],
+				},
+			},
+		},
+		{
+			displayName: "Event Content Max Length",
+			name: "eventContentMaxLength",
+			type: "number",
+			default: 400,
+			description:
+				"When Event Payload Detail is Summary, long event text and MCP payloads are truncated to this length",
+			displayOptions: {
+				show: {
+					includeEvents: [true],
+					eventPayloadDetail: ["summary"],
+				},
+			},
 		},
 		{
 			displayName: "Streaming",
@@ -370,7 +469,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"When SDK runtime is used, collect streamed events internally before returning the final result",
+				"Use the SDK streaming path. When the current n8n execution UI supports live chunks, assistant text is streamed while the run is in progress; otherwise the stream is still collected internally and returned at the end.",
 		},
 		{
 			displayName: "Ephemeral",
@@ -387,14 +486,6 @@ function buildCommonFields() {
 			default: false,
 			description:
 				"Leave off for normal use. Non-Git working directories are auto-detected and skipped automatically; enable only to force the bypass",
-		},
-		{
-			displayName: "Danger Bypass",
-			name: "dangerBypass",
-			type: "boolean",
-			default: false,
-			description:
-				"Bypass normal safety gates in the CLI path. Use only in tightly controlled environments",
 		},
 		{
 			displayName: "Enable Network Access",

@@ -7,8 +7,7 @@ const {
 	parseStringList,
 	resolvePathMaybeRelative,
 	setConfigValue,
-	writeJsonFile,
-} = require("../lib/codex-cli");
+} = require("../lib/codex-utils");
 
 function directoryHasGitRepo(startDirectory) {
 	if (!startDirectory) return false;
@@ -160,30 +159,6 @@ function buildPrompt({ prompt, systemInstructions, transcriptEntries, skillDirec
 	return sections.filter(Boolean).join("\n\n");
 }
 
-async function maybeWriteOutputSchema(workingDirectory, outputSchema) {
-	if (!outputSchema || Object.keys(outputSchema).length === 0) {
-		return {
-			schemaPath: "",
-			cleanup: async () => {},
-		};
-	}
-
-	const schemaPath = await writeJsonFile(
-		path.join(workingDirectory, "data", "codex-tmp"),
-		"output-schema",
-		JSON.stringify(outputSchema, null, 2),
-	);
-
-	return {
-		schemaPath,
-		cleanup: async () => {
-			try {
-				await fs.promises.unlink(schemaPath);
-			} catch {}
-		},
-	};
-}
-
 module.exports = {
 	buildCodexConfig,
 	buildPrompt,
@@ -192,5 +167,4 @@ module.exports = {
 	resolveAdditionalDirectories,
 	resolveSkillDirectories,
 	shouldSkipGitRepoCheck,
-	maybeWriteOutputSchema,
 };

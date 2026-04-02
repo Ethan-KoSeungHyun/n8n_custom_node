@@ -238,7 +238,7 @@ async function createRun(input) {
 		input.executionId || null,
 		input.resource || "agent",
 		input.operation || "exec",
-		input.runtime || "cli",
+		input.runtime || "sdk",
 		input.status || "in_progress",
 		input.sessionId || null,
 		input.threadId || null,

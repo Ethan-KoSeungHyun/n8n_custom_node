@@ -3,7 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CodexMcpToolset = void 0;
 
 const { NodeConnectionTypes, NodeOperationError } = require("n8n-workflow");
-const { parseOptionalJsonArray, parseOptionalJsonObject } = require("./lib/codex-cli");
+const {
+	parseOptionalJsonArray,
+	parseOptionalJsonObject,
+} = require("./lib/codex-utils");
 const { parseDelimitedPaths } = require("./lib/node-runtime-helpers");
 
 const MCP_SERVER_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -37,6 +40,13 @@ class CodexMcpToolset {
 		outputs: [NodeConnectionTypes.AiTool],
 		outputNames: ["Toolset"],
 		properties: [
+			{
+				displayName:
+					"Codex MCP Toolset is a configuration provider, not the runtime executor. Actual MCP calls happen inside Codex Agent, so runtime logs and used-tool details appear on Codex Agent output.",
+				name: "toolsetBehaviorNotice",
+				type: "notice",
+				default: "",
+			},
 			{
 				displayName: "Server Name",
 				name: "serverName",
@@ -73,7 +83,8 @@ class CodexMcpToolset {
 				type: "string",
 				typeOptions: { rows: 3 },
 				default: "",
-				description: "Comma or newline separated list of MCP tools to prefer",
+				description:
+					"Comma or newline separated MCP tool names to prefer, for example jira_get_issue. Do not put server file paths here",
 			},
 			{
 				displayName: "Exclude Tools",
@@ -81,7 +92,8 @@ class CodexMcpToolset {
 				type: "string",
 				typeOptions: { rows: 3 },
 				default: "",
-				description: "Comma or newline separated list of MCP tools to avoid",
+				description:
+					"Comma or newline separated MCP tool names to avoid, for example jira_transition_issue",
 			},
 			{
 				displayName: "Server URL",

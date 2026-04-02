@@ -2,6 +2,9 @@
 
 const {
 	buildArtifactsSummary,
+	buildContextPressure,
+	buildExecutionDetails,
+	buildOutputEvents,
 	captureGitArtifacts,
 	extractArtifactsFromEvents,
 	normalizeEvents,
@@ -17,7 +20,6 @@ const {
 	upsertSessionBinding,
 	getSessionBinding,
 } = require("../store/codex-store");
-const { runCliAgent } = require("./cli-runtime");
 const { runSdkAgent } = require("./sdk-runtime");
 
 function truncatePrompt(value, maxLength = 2000) {
@@ -37,9 +39,8 @@ function shouldRecoverThread(error) {
 	);
 }
 
-function resolveRuntime(mode, defaultRuntime = "cli") {
-	if (!mode || mode === "auto") return defaultRuntime;
-	return mode;
+function resolveRuntime() {
+	return "sdk";
 }
 
 function resolveInitialThreadId(request, binding) {
@@ -53,6 +54,66 @@ function resolveInitialThreadId(request, binding) {
 		return null;
 	}
 	return binding?.threadId || null;
+}
+
+function deriveUsedMcpServers(mcpCalls) {
+	return [...new Set((Array.isArray(mcpCalls) ? mcpCalls : []).map((entry) => entry.server).filter(Boolean))];
+}
+
+function deriveUnusedMcpServers(mcpConfigured, usedMcpServers) {
+	const configuredServers = (mcpConfigured?.servers || [])
+		.map((entry) => entry.serverName)
+		.filter(Boolean);
+	return configuredServers.filter((name) => !usedMcpServers.includes(name));
+}
+
+function buildRunResultPayload(request, result, artifacts, storedEventCount, sessionRecovered) {
+	const executionDetails = buildExecutionDetails(
+		result.events,
+		request.workingDirectory,
+		request.options,
+	);
+	const contextPressure = buildContextPressure(
+		result.usage || null,
+		request.sessionStrategy,
+		request.options,
+	);
+	const mcpConfigured = request.mcpConfigured || {
+		serverCount: 0,
+		servers: [],
+		toolsetNodesAreConfigurationOnly: true,
+		runtimeEventsAppearOn: "Codex Agent",
+	};
+	const usedMcpServers = deriveUsedMcpServers(executionDetails.mcpCalls);
+	const unusedMcpServers = deriveUnusedMcpServers(mcpConfigured, usedMcpServers);
+
+	return {
+		runId: request.runStart.id,
+		runtime: request.runtime,
+		threadId: result.threadId || null,
+		sessionId: request.sessionId || null,
+		finalResponse: result.finalResponse || "",
+		parsedFinalResponse: result.parsedFinalResponse || null,
+		usage: result.usage || null,
+		contextPressure,
+		recommendedAction: contextPressure.recommendedAction,
+		stderr: result.stderr || "",
+		eventPayloadDetail: request.options?.eventPayloadDetail || "summary",
+		events: Boolean(request.options?.includeEvents)
+			? buildOutputEvents(result.events, request.options)
+			: undefined,
+		storedEventCount,
+		artifactsSummary: buildArtifactsSummary(artifacts),
+		eventTypes: executionDetails.eventTypes,
+		mcpCalls: executionDetails.mcpCalls,
+		mcpConfigured,
+		usedMcpServers,
+		unusedMcpServers,
+		commands: executionDetails.commands,
+		fileChanges: executionDetails.fileChanges,
+		progressTimeline: executionDetails.progressTimeline,
+		sessionRecovered,
+	};
 }
 
 async function executeRecoveredRun(request) {
@@ -109,41 +170,38 @@ async function executeRecoveredRun(request) {
 		outputTokens: usage.output_tokens ?? null,
 		stderr: recoveredResult.stderr || "",
 		finalResponse: recoveredResult.finalResponse || "",
-		metadata: {
-			sessionBindingId: recoveredBinding?.id || null,
-			artifactsSummary: buildArtifactsSummary(artifacts),
-			storedEventCount,
-			recoveredFromThread: request.binding.threadId,
-		},
+			metadata: {
+				sessionBindingId: recoveredBinding?.id || null,
+				artifactsSummary: buildArtifactsSummary(artifacts),
+				executionDetails: buildExecutionDetails(
+					recoveredResult.events,
+					request.workingDirectory,
+					request.options,
+				),
+				contextPressure: buildContextPressure(
+					recoveredResult.usage || null,
+					request.sessionStrategy,
+					request.options,
+				),
+				storedEventCount,
+				recoveredFromThread: request.binding.threadId,
+			},
 	});
-	return {
-		runId: request.runStart.id,
-		runtime: request.runtime,
-		threadId: recoveredResult.threadId || null,
-		sessionId: request.sessionId || null,
-		finalResponse: recoveredResult.finalResponse || "",
-		parsedFinalResponse: recoveredResult.parsedFinalResponse || null,
-		usage: recoveredResult.usage || null,
-		stderr: recoveredResult.stderr || "",
-		events: Boolean(request.options?.includeEvents)
-			? recoveredResult.events
-			: undefined,
+	return buildRunResultPayload(
+		request,
+		recoveredResult,
+		artifacts,
 		storedEventCount,
-		artifactsSummary: buildArtifactsSummary(artifacts),
-		sessionRecovered: true,
-	};
+		true,
+	);
 }
 
 async function executeWithRuntime(request) {
-	if (request.runtime === "sdk") {
-		return await runSdkAgent(request);
-	}
-
-	return await runCliAgent(request);
+	return await runSdkAgent(request);
 }
 
 async function executeAgentRun(request) {
-	const runtime = resolveRuntime(request.runtimeMode, request.defaultRuntime || "cli");
+	const runtime = resolveRuntime();
 	const bindingKey =
 		request.sessionStrategy === "autoResume" && request.sessionId
 			? toBindingKey({
@@ -243,24 +301,27 @@ async function executeAgentRun(request) {
 			metadata: {
 				sessionBindingId: binding?.id || null,
 				artifactsSummary: buildArtifactsSummary(artifacts),
+				executionDetails: buildExecutionDetails(
+					result.events,
+					request.workingDirectory,
+					request.options,
+				),
+				contextPressure: buildContextPressure(
+					result.usage || null,
+					request.sessionStrategy,
+					request.options,
+				),
 				storedEventCount,
 			},
 		});
 
-		return {
-			runId: runStart.id,
-			runtime,
-			threadId: result.threadId || null,
-			sessionId: request.sessionId || null,
-			finalResponse: result.finalResponse || "",
-			parsedFinalResponse: result.parsedFinalResponse || null,
-			usage: result.usage || null,
-			stderr: result.stderr || "",
-			events: Boolean(request.options?.includeEvents) ? result.events : undefined,
+		return buildRunResultPayload(
+			{ ...request, runStart, runtime },
+			result,
+			artifacts,
 			storedEventCount,
-			artifactsSummary: buildArtifactsSummary(artifacts),
-			sessionRecovered: false,
-		};
+			false,
+		);
 	} catch (error) {
 		if (
 			binding &&
