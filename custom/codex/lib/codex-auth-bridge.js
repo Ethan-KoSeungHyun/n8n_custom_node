@@ -20,7 +20,7 @@ const {
 	spawnCodexCommand,
 } = require("./codex-profile-utils");
 
-const DEFAULT_HOST = process.env.CODEX_AUTH_BRIDGE_HOST || "127.0.0.1";
+const DEFAULT_HOST = process.env.CODEX_AUTH_BRIDGE_HOST || "localhost";
 const DEFAULT_PORT = Number(process.env.CODEX_AUTH_BRIDGE_PORT || 3481);
 
 function stripAnsi(text) {

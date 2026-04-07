@@ -20,10 +20,29 @@ class CodexChatgptAccount {
 	properties = [
 		{
 			displayName:
-				'<strong>Connect</strong>를 누르면 Codex 계정 연결 창이 열립니다. 먼저 <strong>Device Code로 연결</strong>을 사용하고, 그 방식이 깔끔하게 끝나지 않을 때만 같은 창에서 <strong>서버 브라우저에서 연결 (Admin)</strong>을 사용하세요.',
+				'연결 환경을 선택한 뒤 <strong>Connect</strong>를 누르세요.<br>• <strong>로컬 (개발용)</strong>: Mac/로컬 서버에서 직접 테스트할 때 사용합니다.<br>• <strong>프로덕션</strong>: 실제 배포 서버(seunghyun.space)로 연결합니다.',
 			name: "connectNotice",
 			type: "notice",
 			default: "",
+		},
+		{
+			displayName: "연결 환경",
+			name: "bridgeEnvironment",
+			type: "options",
+			default: "local",
+			noDataExpression: true,
+			options: [
+				{
+					name: "로컬 (개발용) — http://localhost:3481",
+					value: "local",
+				},
+				{
+					name: "프로덕션 — codex-bridge.seunghyun.space",
+					value: "remote",
+				},
+			],
+			description:
+				"로컬 테스트는 '로컬'을, 실서버 배포 환경은 '프로덕션'을 선택하세요.",
 		},
 		{
 			displayName: "Codex ID",
@@ -54,17 +73,32 @@ class CodexChatgptAccount {
 				"브리지 주소나 Codex 실행 파일 경로를 직접 바꿔야 할 때만 켜세요.",
 		},
 		{
-			displayName: "Bridge Base URL",
+			displayName: "Local Bridge URL",
 			name: "bridgeBaseUrl",
 			type: "string",
-			default: "http://127.0.0.1:3481",
+			default: "http://localhost:3481",
 			displayOptions: {
 				show: {
 					showAdvancedSettings: [true],
+					bridgeEnvironment: ["local"],
 				},
 			},
 			description:
 				"로컬 Codex 인증 bridge 주소입니다. 별도 포트나 주소를 쓰는 경우가 아니면 기본값을 그대로 두세요.",
+		},
+		{
+			displayName: "Production Bridge URL",
+			name: "remoteBridgeUrl",
+			type: "string",
+			default: "https://codex-bridge.seunghyun.space",
+			displayOptions: {
+				show: {
+					showAdvancedSettings: [true],
+					bridgeEnvironment: ["remote"],
+				},
+			},
+			description:
+				"프로덕션 Codex 인증 bridge 주소입니다. 배포 도메인이 바뀐 경우에만 수정하세요.",
 		},
 		{
 			displayName: "Base URL",
@@ -104,7 +138,7 @@ class CodexChatgptAccount {
 			type: "hidden",
 			required: true,
 			default:
-				'={{($self["bridgeBaseUrl"] || $env.CODEX_AUTH_BRIDGE_BASE_URL || ("http://127.0.0.1:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481"))).replace(/\\/$/, "") + "/oauth/authorize"}}',
+				'={{($self["bridgeEnvironment"] === "remote" ? ($self["remoteBridgeUrl"] || $env.CODEX_AUTH_BRIDGE_BASE_URL || "https://codex-bridge.seunghyun.space") : ($self["bridgeBaseUrl"] || ("http://localhost:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481")))).replace(/\\/$/, "") + "/oauth/authorize"}}',
 		},
 		{
 			displayName: "Access Token URL",
@@ -112,7 +146,7 @@ class CodexChatgptAccount {
 			type: "hidden",
 			required: true,
 			default:
-				'={{($self["bridgeBaseUrl"] || $env.CODEX_AUTH_BRIDGE_BASE_URL || ("http://127.0.0.1:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481"))).replace(/\\/$/, "") + "/oauth/token"}}',
+				'={{($self["bridgeEnvironment"] === "remote" ? ($self["remoteBridgeUrl"] || $env.CODEX_AUTH_BRIDGE_BASE_URL || "https://codex-bridge.seunghyun.space") : ($self["bridgeBaseUrl"] || ("http://localhost:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481")))).replace(/\\/$/, "") + "/oauth/token"}}',
 		},
 		{
 			displayName: "Client ID",
@@ -161,7 +195,7 @@ class CodexChatgptAccount {
 	test = {
 		request: {
 			baseURL:
-				'={{($credentials.bridgeBaseUrl || $env.CODEX_AUTH_BRIDGE_BASE_URL || ("http://127.0.0.1:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481"))).replace(/\\/$/, "")}}',
+				'={{($credentials.bridgeEnvironment === "remote" ? ($credentials.remoteBridgeUrl || $env.CODEX_AUTH_BRIDGE_BASE_URL || "https://codex-bridge.seunghyun.space") : ($credentials.bridgeBaseUrl || ("http://localhost:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481")))).replace(/\\/$/, "")}}',
 			url:
 				'={{"/oauth/status?profileKey=" + encodeURIComponent((($credentials.oauthTokenData || {})["profile_key"]) || "") + "&codexExecutable=" + encodeURIComponent($credentials.codexExecutable || "")}}',
 			ignoreHttpStatusErrors: true,
