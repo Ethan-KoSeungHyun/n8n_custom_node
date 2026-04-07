@@ -76,6 +76,41 @@ function deriveCodexId(profileState, session) {
 	return sanitizeProfileKey(localPart);
 }
 
+// disconnect/purge 후 n8n credential을 OAuth callback 없이 직접 업데이트
+// (OAuth state 재사용에 따른 "invalid state" 에러 방지)
+async function directUpdateN8nCredential(session, { connected, status, message }) {
+	const decodedState = decodeN8nOauthState(session.state);
+	const credentialId = String(decodedState?.cid || "").trim();
+	if (!credentialId) return;
+
+	try {
+		const { Container } = require("@n8n/di");
+		const { CredentialsRepository } = require("@n8n/db");
+		const { Credentials } = require("n8n-core");
+		const credentialsRepository = Container.get(CredentialsRepository);
+		const credential = await credentialsRepository.findOneBy({ id: credentialId });
+		if (!credential || credential.type !== "codexChatgptAccount") return;
+
+		const coreCredential = new Credentials(credential, credential.type, credential.data);
+		// connected: false 시 oauthTokenData를 null로 지워야 n8n이 "Connect" 버튼을 표시함.
+		// 값이 있으면 access_token이 비어있어도 n8n은 "Account connected"로 표시.
+		const tokenData = connected
+			? buildOauthTokenData(
+					{ ...session, status, message },
+					{ connected: true, status, message, lastLoginMethod: "" },
+			  )
+			: null;
+		coreCredential.updateData({ oauthTokenData: tokenData });
+		await credentialsRepository.update(credential.id, {
+			...coreCredential.getDataToSave(),
+			updatedAt: new Date(),
+		});
+		appendLog(session, `n8n credential updated directly (connected=${connected}).`);
+	} catch (error) {
+		appendLog(session, `Direct credential update skipped: ${error.message || String(error)}`);
+	}
+}
+
 async function syncCredentialCodexIdForSession(session, profileState) {
 	const decodedState = decodeN8nOauthState(session.state);
 	const credentialId = String(decodedState?.cid || "").trim();
@@ -365,6 +400,8 @@ async function getOrCreateSession(searchParams, options = {}) {
 			currentChild: null,
 			callbackUrl: "",
 			completedCode: "",
+			closePopup: false,
+			closeMessage: "",
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 		};
@@ -452,6 +489,8 @@ async function refreshSessionProfileState(session, options = {}) {
 	if (options.clearCompletion) {
 		session.callbackUrl = "";
 		session.completedCode = "";
+		session.closePopup = false;
+		session.closeMessage = "";
 	}
 
 	return session;
@@ -526,9 +565,27 @@ function handleLoginOutput(session, chunk) {
 	const text = stripAnsi(rawText);
 
 	if (!session.verificationUrl) {
-		const urlMatch = text.match(/https?:\/\/\S+/i);
-		if (urlMatch) {
-			session.verificationUrl = urlMatch[0].replace(/[).,;:]+$/, "");
+		// "navigate to this URL" 패턴 뒤의 URL을 우선 추출 (codex browser login 출력 형식)
+		const navigateMatch = text.match(/navigate to this URL[^:]*:\s*(https?:\/\/\S+)/i);
+		if (navigateMatch) {
+			session.verificationUrl = navigateMatch[1].replace(/[).,;:]+$/, "");
+		} else {
+			// fallback: URL 호스트가 localhost/127.0.0.1이 아닌 첫 번째 URL 캡처
+			const urlMatches = [...text.matchAll(/https?:\/\/([^\s/]+)/gi)];
+			const externalMatch = urlMatches.find(
+				(m) => !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(m[1]),
+			);
+			if (externalMatch) {
+				const fullMatch = text.match(
+					new RegExp(
+						`https?://${externalMatch[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\S*`,
+						"i",
+					),
+				);
+				if (fullMatch) {
+					session.verificationUrl = fullMatch[0].replace(/[).,;:]+$/, "");
+				}
+			}
 		}
 	}
 
@@ -557,24 +614,28 @@ async function finalizeLoginFlow(session, exitCode, signal) {
 	await refreshSessionProfileState(session, { clearCompletion: true });
 
 	if (session.status === "connected") {
-		session.message = "Codex 계정 연결이 완료되었습니다. n8n으로 돌아갑니다.";
-		completeSession(session, { connected: true });
-		return;
-	}
-
-	if (session.status === "connected") {
+		// profileKey 정규화 시도
 		const preferredProfileKey = deriveProfileKeyFromIdentity({
 			email: session.email,
 			fallbackPrefix: session.profileKey,
 		});
 		if (preferredProfileKey && preferredProfileKey !== session.profileKey) {
-			session.profileKey = await renameProfileKey(
-				session.profileKey,
-				preferredProfileKey,
-			);
-			await refreshSessionProfileState(session, { clearCompletion: true });
+			try {
+				session.profileKey = await renameProfileKey(
+					session.profileKey,
+					preferredProfileKey,
+				);
+				await refreshSessionProfileState(session, { clearCompletion: true });
+			} catch {}
 		}
 		session.message = "Codex 계정 연결이 완료되었습니다. n8n으로 돌아갑니다.";
+		// 1) DB 직접 업데이트 (OAuth popup callback 실패 시 fallback)
+		await directUpdateN8nCredential(session, {
+			connected: true,
+			status: session.status,
+			message: session.message,
+		});
+		// 2) popup 리다이렉트용 callback URL 생성 (정상 popup 흐름 지원)
 		completeSession(session, { connected: true });
 		return;
 	}
@@ -630,11 +691,22 @@ async function applySessionAction(session, action) {
 	session.lastLoginAt = profileState.lastLoginAt;
 	session.displayName = profileState.displayName;
 	session.email = profileState.email;
-	completeSession(session, {
+
+	// OAuth callback redirect 없이 n8n credential을 직접 업데이트
+	// (이미 소진된 OAuth state 재사용으로 인한 "invalid state" 에러 방지)
+	await directUpdateN8nCredential(session, {
 		connected: false,
 		status: profileState.status,
 		message: session.message,
 	});
+
+	// 팝업을 자동으로 닫도록 신호 전송
+	session.closePopup = true;
+	session.closeMessage =
+		action === "disconnect"
+			? "연결이 해제되었습니다. 이 창을 닫아도 됩니다."
+			: "인증이 초기화되었습니다. 이 창을 닫아도 됩니다.";
+	session.updatedAt = Date.now();
 }
 
 function completeSession(session, overrides = {}) {
@@ -692,6 +764,8 @@ function sessionToClient(session) {
 	return {
 		status: session.status,
 		message: session.message,
+		closePopup: session.closePopup || false,
+		closeMessage: session.closeMessage || "",
 		profileKey: session.profileKey,
 		loginMethod: session.loginMethod,
 		accountHint: session.accountHint,
@@ -756,280 +830,415 @@ function writeHtml(res, statusCode, html) {
 
 function renderAuthorizePage(session) {
 	return `<!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>Codex ChatGPT Account</title>
+	<title>Codex ChatGPT 계정 연결</title>
 	<style>
 		:root {
-			font-family: "Segoe UI", Arial, sans-serif;
+			font-family: "Segoe UI", "Apple SD Gothic Neo", Arial, sans-serif;
 			color-scheme: light;
-			--bg: #f6f7fb;
+			--bg: #f5f7fa;
 			--panel: #ffffff;
 			--text: #17191c;
-			--muted: #5f6570;
-			--border: #d7dbe4;
-			--accent: #101828;
+			--muted: #6b7280;
+			--border: #e5e7eb;
+			--accent: #111827;
+			--accentHover: #374151;
 			--accentText: #ffffff;
-			--warn: #7a2e0b;
-			--warnBg: #fff0e8;
-			--ok: #1f6b3b;
-			--okBg: #edf9f0;
+			--danger: #dc2626;
+			--dangerHover: #b91c1c;
+			--warn: #92400e;
+			--warnBg: #fffbeb;
+			--warnBorder: #fcd34d;
+			--ok: #065f46;
+			--okBg: #ecfdf5;
+			--okBorder: #6ee7b7;
+			--info: #1e40af;
+			--infoBg: #eff6ff;
+			--infoBorder: #93c5fd;
 		}
+		* { box-sizing: border-box; }
 		body {
 			margin: 0;
-			padding: 24px;
-			background: linear-gradient(180deg, #eef2f9 0%, var(--bg) 100%);
+			padding: 32px 24px;
+			min-height: 100vh;
+			background: var(--bg);
 			color: var(--text);
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
 		}
 		.card {
-			max-width: 860px;
-			margin: 0 auto;
+			width: 100%;
+			max-width: 560px;
 			background: var(--panel);
 			border: 1px solid var(--border);
-			border-radius: 18px;
-			box-shadow: 0 14px 32px rgba(16, 24, 40, 0.08);
-			padding: 24px;
+			border-radius: 16px;
+			box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+			overflow: hidden;
 		}
-		h1 {
-			margin: 0 0 8px;
-			font-size: 24px;
+		.card-header {
+			padding: 20px 24px 16px;
+			border-bottom: 1px solid var(--border);
 		}
-		p {
-			margin: 0 0 12px;
+		.card-header h1 {
+			margin: 0 0 4px;
+			font-size: 17px;
+			font-weight: 700;
+			letter-spacing: -0.01em;
+		}
+		.card-header p {
+			margin: 0;
+			font-size: 13px;
 			color: var(--muted);
 			line-height: 1.5;
 		}
-		.grid {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-			gap: 12px;
-			margin: 18px 0 22px;
-		}
-		.meta {
-			border: 1px solid var(--border);
-			border-radius: 12px;
-			padding: 12px 14px;
-			background: #fbfcff;
-		}
-		.meta strong {
-			display: block;
-			font-size: 12px;
-			letter-spacing: 0.04em;
-			text-transform: uppercase;
-			color: var(--muted);
-			margin-bottom: 6px;
-		}
-		.toolbar {
+		.card-body { padding: 20px 24px; }
+		/* 상태 배너 */
+		.status-banner {
 			display: flex;
-			flex-wrap: wrap;
+			align-items: center;
 			gap: 10px;
-			margin: 18px 0;
-		}
-		button, a.button {
-			border: 1px solid var(--accent);
-			background: var(--accent);
-			color: var(--accentText);
-			border-radius: 999px;
-			padding: 10px 16px;
+			padding: 12px 16px;
+			border-radius: 10px;
+			border: 1px solid var(--border);
+			margin-bottom: 16px;
 			font-size: 14px;
 			font-weight: 600;
-			cursor: pointer;
-			text-decoration: none;
 		}
-		button.secondary, a.button.secondary {
-			background: white;
-			color: var(--accent);
-		}
-		button.danger {
-			border-color: #b42318;
-			background: #b42318;
-		}
-		button:disabled {
-			opacity: 0.55;
-			cursor: wait;
-		}
-		.status {
-			display: inline-flex;
-			align-items: center;
-			padding: 6px 10px;
-			border-radius: 999px;
-			font-weight: 600;
+		.status-banner.connected { background: var(--okBg); border-color: var(--okBorder); color: var(--ok); }
+		.status-banner.needs_reconnect, .status-banner.error { background: var(--warnBg); border-color: var(--warnBorder); color: var(--warn); }
+		.status-banner.disconnected { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+		.status-banner.pending, .status-banner.idle { background: var(--infoBg); border-color: var(--infoBorder); color: var(--info); }
+		.status-icon { font-size: 16px; flex-shrink: 0; }
+		.status-text-wrap { flex: 1; min-width: 0; }
+		.status-label { font-weight: 700; }
+		.status-sub { font-size: 12px; font-weight: 400; opacity: 0.85; margin-top: 1px; }
+		/* 계정 정보 */
+		.account-info {
+			background: #f9fafb;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			padding: 12px 16px;
+			margin-bottom: 16px;
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 10px 16px;
 			font-size: 13px;
 		}
-		.status.connected {
-			color: var(--ok);
-			background: var(--okBg);
+		.info-row { display: flex; flex-direction: column; gap: 2px; }
+		.info-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+		.info-value { font-weight: 500; color: var(--text); word-break: break-all; }
+		/* Device Code 박스 */
+		.device-box {
+			background: var(--infoBg);
+			border: 1px solid var(--infoBorder);
+			border-radius: 10px;
+			padding: 14px 16px;
+			margin-bottom: 16px;
+			font-size: 13px;
 		}
-		.status.pending, .status.idle {
-			color: #7a5a00;
-			background: #fff7dd;
+		.device-box .code {
+			font-family: "Consolas", "Courier New", monospace;
+			font-size: 22px;
+			font-weight: 800;
+			letter-spacing: 0.1em;
+			color: var(--info);
+			margin: 8px 0 4px;
 		}
-		.status.error, .status.needs_reconnect, .status.disconnected {
-			color: var(--warn);
-			background: var(--warnBg);
+		.device-box a { color: var(--info); font-weight: 600; }
+		/* 버튼 */
+		.btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+		.btn {
+			display: inline-flex; align-items: center; gap: 6px;
+			border-radius: 8px; padding: 9px 16px;
+			font-size: 14px; font-weight: 600; cursor: pointer;
+			border: 1px solid transparent; transition: background 0.15s, opacity 0.15s;
+			line-height: 1;
 		}
-		.message {
-			margin-top: 10px;
-			padding: 12px 14px;
-			border-radius: 12px;
-			border: 1px solid var(--border);
-			background: #fbfcff;
-			color: var(--text);
+		.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+		.btn-primary:hover:not(:disabled) { background: var(--accentHover); border-color: var(--accentHover); }
+		.btn-secondary { background: #fff; color: var(--accent); border-color: var(--border); }
+		.btn-secondary:hover:not(:disabled) { background: #f9fafb; }
+		.btn-admin { color: var(--muted); border-color: #d1d5db; font-size: 12px; }
+		.btn-admin:hover:not(:disabled) { background: #f3f4f6; color: var(--text); }
+		.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+		.btn-danger:hover:not(:disabled) { background: var(--dangerHover); border-color: var(--dangerHover); }
+		.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+		.btn-sm { padding: 7px 12px; font-size: 12px; }
+		/* 로그 */
+		.log-toggle {
+			font-size: 12px; color: var(--muted); background: none; border: none;
+			cursor: pointer; padding: 0; text-decoration: underline; margin-bottom: 8px;
 		}
-		pre {
-			margin: 16px 0 0;
-			padding: 14px;
-			border-radius: 14px;
-			background: #101828;
-			color: #d0d5dd;
-			font-size: 12px;
-			line-height: 1.5;
+		.log-toggle:hover { color: var(--text); }
+		pre#logOutput {
+			display: none;
+			margin: 0;
+			padding: 12px;
+			border-radius: 8px;
+			background: #1f2937;
+			color: #d1d5db;
+			font-size: 11.5px;
+			line-height: 1.55;
 			white-space: pre-wrap;
 			word-break: break-word;
-			min-height: 120px;
-			max-height: 320px;
+			max-height: 240px;
 			overflow: auto;
 		}
-		.small {
-			font-size: 13px;
+		pre#logOutput.visible { display: block; }
+		/* 닫기 성공 화면 */
+		.close-screen {
+			display: none;
+			flex-direction: column;
+			align-items: center;
+			text-align: center;
+			padding: 32px 24px;
+			gap: 12px;
 		}
-		.code-box {
-			font-family: Consolas, "Courier New", monospace;
-			font-size: 18px;
-			font-weight: 700;
-			letter-spacing: 0.08em;
-		}
+		.close-screen.visible { display: flex; }
+		.close-icon { font-size: 48px; }
+		.close-title { font-size: 18px; font-weight: 700; }
+		.close-sub { font-size: 14px; color: var(--muted); }
+		.main-content { }
 	</style>
 </head>
 <body>
 	<div class="card">
-		<h1>Codex ChatGPT Account</h1>
-		<p>
-			이 credential을 전용 Codex ChatGPT 로그인에 연결합니다. 기본 경로는 Device Code입니다.
-			그 방식이 깔끔하게 끝나지 않을 때만 이 컴퓨터에서 브라우저를 여는 로컬 브라우저 방식을 사용하세요.
-		</p>
-		<div class="grid">
-			<div class="meta"><strong>상태</strong><span id="statusBadge" class="status">불러오는 중</span></div>
-			<div class="meta"><strong>프로필 키</strong><span id="profileKey">${escapeHtml(
-				session.profileKey || "처음 연결할 때 생성됩니다",
-			)}</span></div>
-			<div class="meta"><strong>Codex ID</strong><span id="accountHint">-</span></div>
-			<div class="meta"><strong>워크스페이스</strong><span id="workspaceHint">-</span></div>
-			<div class="meta"><strong>로그인 방식</strong><span id="loginMethod">-</span></div>
-			<div class="meta"><strong>마지막 로그인</strong><span id="lastLoginAt">-</span></div>
+		<!-- 닫기 완료 화면 (disconnect/purge 후 표시) -->
+		<div id="closeScreen" class="close-screen">
+			<div class="close-icon">✅</div>
+			<div class="close-title" id="closeTitle">완료</div>
+			<div class="close-sub" id="closeSub">이 창을 닫아도 됩니다.</div>
 		</div>
-		<div class="toolbar">
-			<button id="deviceBtn" onclick="runAction('device')">Device Code로 연결</button>
-			<button id="browserBtn" class="secondary" onclick="runAction('browser')">서버 브라우저에서 연결 (Admin)</button>
-			<button id="refreshBtn" class="secondary" onclick="runAction('refresh')">상태 새로고침</button>
-			<button id="disconnectBtn" class="secondary" onclick="runAction('disconnect')">연결 해제</button>
-			<button id="purgeBtn" class="danger" onclick="runAction('purge')">인증 캐시 비우기</button>
-		</div>
-		<div class="message">
-			<div id="messageText">${escapeHtml(session.message)}</div>
-			<div id="deviceInfo" class="small" style="margin-top:10px; display:none;">
-				<div><strong>인증 URL</strong>: <a id="verificationUrl" target="_blank" rel="noreferrer"></a></div>
-				<div style="margin-top:6px;"><strong>사용자 코드</strong>: <span id="userCode" class="code-box"></span></div>
+
+		<!-- 메인 UI -->
+		<div id="mainContent">
+			<div class="card-header">
+				<h1>Codex ChatGPT 계정 연결</h1>
+				<p id="headerDesc">ChatGPT 계정으로 이 credential을 연결합니다.</p>
+			</div>
+			<div class="card-body">
+				<!-- 상태 배너 -->
+				<div id="statusBanner" class="status-banner idle">
+					<span class="status-icon" id="statusIcon">⟳</span>
+					<div class="status-text-wrap">
+						<div class="status-label" id="statusLabel">확인 중...</div>
+						<div class="status-sub" id="statusSub"></div>
+					</div>
+				</div>
+
+				<!-- 계정 정보 (연결됨 or needs_reconnect 때만 표시) -->
+				<div id="accountInfo" class="account-info" style="display:none">
+					<div class="info-row">
+						<span class="info-label">계정</span>
+						<span class="info-value" id="infoEmail">-</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">워크스페이스</span>
+						<span class="info-value" id="infoWorkspace">-</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">마지막 로그인</span>
+						<span class="info-value" id="infoLastLogin">-</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">프로필 키</span>
+						<span class="info-value" id="infoProfileKey" style="font-size:11px;color:#6b7280">${escapeHtml(session.profileKey || "-")}</span>
+					</div>
+				</div>
+
+				<!-- Device Code 정보 박스 -->
+				<div id="deviceBox" class="device-box" style="display:none">
+					<div style="font-weight:600;margin-bottom:4px;">🔐 Device Code 로그인</div>
+					<div>아래 URL을 어느 기기에서든 열어 코드를 입력하세요.</div>
+					<div class="code" id="deviceCode"></div>
+					<div><a id="deviceUrl" href="#" target="_blank" rel="noreferrer">인증 페이지 열기 →</a></div>
+				</div>
+
+				<!-- 버튼 그룹: 연결된 상태 -->
+				<div id="btnGroupConnected" class="btn-group" style="display:none">
+					<button class="btn btn-primary" id="btnRelogin" onclick="runAction('browser')">↺ 재로그인</button>
+					<button class="btn btn-secondary" id="btnRefreshConn" onclick="runAction('refresh')">상태 확인</button>
+					<button class="btn btn-danger btn-sm" id="btnReset" onclick="confirmReset()">초기화</button>
+				</div>
+
+				<!-- 버튼 그룹: 연결 안 된 상태 -->
+				<div id="btnGroupDisconnected" class="btn-group" style="display:none">
+					<button class="btn btn-primary" id="btnDevice" onclick="runAction('device')">🔑 Device Code 로그인</button>
+					<button class="btn btn-secondary btn-admin" id="btnBrowser" onclick="runAction('browser')" title="서버 머신에서 직접 브라우저를 열어 로그인합니다. 서버에 직접 접근 가능한 관리자만 사용하세요.">🖥 서버 브라우저 로그인 <span style="font-size:10px;opacity:0.75;">(관리자)</span></button>
+					<button class="btn btn-secondary" id="btnRefreshDisc" onclick="runAction('refresh')">상태 확인</button>
+				</div>
+
+				<!-- 로그 토글 -->
+				<button class="log-toggle" onclick="toggleLog()">▸ 상세 로그 보기</button>
+				<pre id="logOutput">업데이트를 기다리는 중...</pre>
 			</div>
 		</div>
-		<pre id="logOutput">업데이트를 기다리는 중...</pre>
 	</div>
 	<script>
 		const state = ${JSON.stringify(session.state)};
 		let redirecting = false;
 		let busy = false;
+		let logVisible = false;
 		const initialState = ${JSON.stringify(sessionToClient(session))};
+
+		const ALL_BTNS = ['btnRelogin','btnRefreshConn','btnReset','btnBrowser','btnDevice','btnRefreshDisc'];
 
 		function setBusy(nextBusy) {
 			busy = nextBusy;
-			for (const id of ['deviceBtn', 'browserBtn', 'refreshBtn', 'disconnectBtn', 'purgeBtn']) {
-				document.getElementById(id).disabled = nextBusy;
+			for (const id of ALL_BTNS) {
+				const el = document.getElementById(id);
+				if (el) el.disabled = nextBusy;
 			}
 		}
 
-		function statusClass(status) {
-			return ['status', status || 'disconnected'].join(' ');
+		function toggleLog() {
+			logVisible = !logVisible;
+			const log = document.getElementById('logOutput');
+			const btn = document.querySelector('.log-toggle');
+			log.classList.toggle('visible', logVisible);
+			btn.textContent = logVisible ? '▾ 상세 로그 숨기기' : '▸ 상세 로그 보기';
 		}
 
-		function formatValue(value, fallback = '-') {
-			return value && String(value).trim() ? value : fallback;
+		function fv(v, fallback = '-') {
+			return v && String(v).trim() ? String(v).trim() : fallback;
 		}
 
-		function formatCodexId(data) {
-			const email = String(data.email || '').trim();
-			if (email.includes('@')) {
-				return email.split('@')[0];
-			}
-			return formatValue(data.accountHint || email);
+		function statusConfig(status) {
+			const map = {
+				connected:       { icon: '✓', label: '연결됨',       sub: 'Codex 계정이 정상 연결되어 있습니다.', cls: 'connected' },
+				needs_reconnect: { icon: '⚠', label: '재연결 필요',  sub: '저장된 인증 정보가 있지만 재확인이 필요합니다.', cls: 'needs_reconnect' },
+				disconnected:    { icon: '✕', label: '연결 안 됨',   sub: 'ChatGPT 계정을 연결해 주세요.', cls: 'disconnected' },
+				pending:         { icon: '⟳', label: '로그인 진행 중…', sub: '완료될 때까지 기다려 주세요.', cls: 'pending' },
+				idle:            { icon: '○', label: '대기 중',       sub: '로그인 방식을 선택하세요.', cls: 'idle' },
+				error:           { icon: '✕', label: '오류 발생',     sub: '로그인에 실패했습니다. 다시 시도해 주세요.', cls: 'error' },
+			};
+			return map[status] || { icon: '○', label: status || '알 수 없음', sub: '', cls: 'idle' };
 		}
 
 		function render(data) {
-			document.getElementById('statusBadge').className = statusClass(data.status);
-			document.getElementById('statusBadge').textContent = formatValue(data.status, 'unknown');
-			document.getElementById('profileKey').textContent = formatValue(data.profileKey, '처음 연결할 때 생성됩니다');
-			document.getElementById('accountHint').textContent = formatCodexId(data);
-			document.getElementById('workspaceHint').textContent = formatValue(data.workspaceHint);
-			document.getElementById('loginMethod').textContent = formatValue(data.loginMethod);
-			document.getElementById('lastLoginAt').textContent = formatValue(data.lastLoginAt);
-			document.getElementById('messageText').textContent = formatValue(data.message, 'Waiting for updates...');
+			if (redirecting) return;
 
-			const hasDeviceData = Boolean(data.verificationUrl || data.userCode);
-			const deviceInfo = document.getElementById('deviceInfo');
-			deviceInfo.style.display = hasDeviceData ? 'block' : 'none';
-			document.getElementById('verificationUrl').textContent = data.verificationUrl || '';
-			document.getElementById('verificationUrl').href = data.verificationUrl || '#';
-			document.getElementById('userCode').textContent = data.userCode || '';
-			document.getElementById('logOutput').textContent = (data.logs && data.logs.length ? data.logs.join('\\n') : '업데이트를 기다리는 중...');
+			// 닫기 신호
+			if (data.closePopup) {
+				redirecting = true;
+				document.getElementById('mainContent').style.display = 'none';
+				const cs = document.getElementById('closeScreen');
+				cs.classList.add('visible');
+				document.getElementById('closeTitle').textContent = data.closeMessage || '완료';
+				document.getElementById('closeSub').textContent = '이 창을 닫아도 됩니다.';
+				setTimeout(() => {
+					try { window.close(); } catch(e) {}
+				}, 2500);
+				return;
+			}
 
-			if (data.callbackUrl && !redirecting) {
+			// OAuth 리다이렉트 (로그인 완료)
+			if (data.callbackUrl) {
 				redirecting = true;
 				window.location.href = data.callbackUrl;
+				return;
+			}
+
+			const st = statusConfig(data.status);
+
+			// 상태 배너
+			const banner = document.getElementById('statusBanner');
+			banner.className = 'status-banner ' + st.cls;
+			document.getElementById('statusIcon').textContent = st.icon;
+			document.getElementById('statusLabel').textContent = st.label;
+
+			// sub 텍스트: 진행 중일 때는 message 사용
+			const isActive = ['pending'].includes(data.status);
+			document.getElementById('statusSub').textContent = isActive
+				? fv(data.message, st.sub)
+				: (data.email ? data.email : st.sub);
+
+			// 계정 정보
+			const hasAccount = Boolean(data.email || data.accountHint || data.workspaceHint);
+			const acctInfo = document.getElementById('accountInfo');
+			acctInfo.style.display = hasAccount ? 'grid' : 'none';
+			if (hasAccount) {
+				document.getElementById('infoEmail').textContent = fv(data.email || data.accountHint);
+				document.getElementById('infoWorkspace').textContent = fv(data.workspaceHint);
+				document.getElementById('infoLastLogin').textContent = fv(data.lastLoginAt);
+				document.getElementById('infoProfileKey').textContent = fv(data.profileKey);
+			}
+
+			// Device Code 박스
+			const hasDevice = Boolean(data.verificationUrl || data.userCode);
+			const devBox = document.getElementById('deviceBox');
+			devBox.style.display = hasDevice ? 'block' : 'none';
+			if (hasDevice) {
+				document.getElementById('deviceCode').textContent = fv(data.userCode);
+				const urlEl = document.getElementById('deviceUrl');
+				urlEl.href = data.verificationUrl || '#';
+				urlEl.textContent = data.verificationUrl ? '인증 페이지 열기 →' : '-';
+				if (!logVisible) toggleLog();
+			}
+
+			// 버튼 그룹
+			const isConnected = data.status === 'connected';
+			const isRunning = Boolean(data.currentlyRunning);
+			document.getElementById('btnGroupConnected').style.display = (isConnected && !isRunning) ? 'flex' : 'none';
+			document.getElementById('btnGroupDisconnected').style.display = (!isConnected && !isRunning) ? 'flex' : 'none';
+
+			// 로그
+			const logs = data.logs && data.logs.length ? data.logs.join('\\n') : '';
+			if (logs) {
+				document.getElementById('logOutput').textContent = logs;
+				if (isActive && !logVisible) toggleLog();
+			}
+		}
+
+		function confirmReset() {
+			if (busy || redirecting) return;
+			if (confirm('인증을 완전히 초기화합니다.\\n로그아웃되며 저장된 토큰이 삭제됩니다.\\n계속하시겠습니까?')) {
+				runAction('purge');
 			}
 		}
 
 		async function fetchState() {
-			const response = await fetch('/oauth/session?state=' + encodeURIComponent(state), {
-				cache: 'no-store',
-			});
-			if (!response.ok) {
-				throw new Error('현재 상태를 불러오지 못했습니다.');
-			}
-			const data = await response.json();
-			render(data);
-			if (!redirecting) {
-				window.setTimeout(fetchState, data.currentlyRunning ? 1500 : 3000);
+			try {
+				const response = await fetch('/oauth/session?state=' + encodeURIComponent(state), { cache: 'no-store' });
+				if (!response.ok) return;
+				const data = await response.json();
+				render(data);
+				if (!redirecting) {
+					window.setTimeout(fetchState, data.currentlyRunning ? 1500 : 4000);
+				}
+			} catch {
+				if (!redirecting) window.setTimeout(fetchState, 5000);
 			}
 		}
 
 		async function runAction(action) {
 			if (busy || redirecting) return;
 			setBusy(true);
+			const endpoint = {
+				device:    '/oauth/device/start',
+				browser:   '/oauth/browser/start',
+				refresh:   '/oauth/refresh',
+				disconnect:'/oauth/disconnect',
+				purge:     '/oauth/purge',
+			}[action];
+			if (!endpoint) { setBusy(false); return; }
 			try {
-				const endpoint = {
-					device: '/oauth/device/start',
-					browser: '/oauth/browser/start',
-					refresh: '/oauth/refresh',
-					disconnect: '/oauth/disconnect',
-					purge: '/oauth/purge',
-				}[action];
 				const response = await fetch(endpoint, {
 					method: 'POST',
-					headers: {
-						'content-type': 'application/json',
-					},
+					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ state }),
 				});
 				const data = await response.json();
-				if (!response.ok) {
-					throw new Error(data.message || data.error || '요청에 실패했습니다.');
-				}
+				if (!response.ok) throw new Error(data.message || data.error || '요청에 실패했습니다.');
 				render(data);
 			} catch (error) {
-				document.getElementById('messageText').textContent = error.message;
+				document.getElementById('statusSub').textContent = error.message;
 			} finally {
-				setBusy(false);
+				if (!redirecting) setBusy(false);
 			}
 		}
 

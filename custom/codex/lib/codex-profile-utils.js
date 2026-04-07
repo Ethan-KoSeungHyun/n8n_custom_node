@@ -373,7 +373,9 @@ async function readProfileState({
 
 	const combinedStatusText = [statusOutput, statusError].filter(Boolean).join("\n");
 	let status = "disconnected";
-	if (/logged in/i.test(combinedStatusText)) {
+	// "Not logged in" 도 /logged in/i 에 매칭되므로 부정 문구를 먼저 걸러냄
+	const hasLoggedIn = /logged in/i.test(combinedStatusText) && !/not logged in/i.test(combinedStatusText);
+	if (hasLoggedIn) {
 		status = "connected";
 	} else if (authData) {
 		status = timedOut ? "needs_reconnect" : "needs_reconnect";
@@ -465,6 +467,12 @@ async function disconnectProfile({
 			env,
 			cwd: structure.profileRoot,
 		});
+	} catch {}
+
+	// auth.json을 삭제해서 status가 정확히 disconnected로 반영되도록 함
+	// (codex logout만으로는 로컬 캐시가 남아 status가 여전히 connected로 표시되는 버그 방지)
+	try {
+		await fsp.rm(structure.authPath, { force: true });
 	} catch {}
 
 	return await readProfileState({
