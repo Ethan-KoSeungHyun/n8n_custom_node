@@ -22,6 +22,10 @@ const {
 
 const DEFAULT_HOST = process.env.CODEX_AUTH_BRIDGE_HOST || "127.0.0.1";
 const DEFAULT_PORT = Number(process.env.CODEX_AUTH_BRIDGE_PORT || 3481);
+
+function stripAnsi(text) {
+	return String(text || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+}
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000;
 const LOG_LINE_LIMIT = 200;
@@ -516,20 +520,24 @@ async function startLoginFlow(session, loginMethod) {
 }
 
 function handleLoginOutput(session, chunk) {
-	const text = chunk.toString("utf8");
-	appendLog(session, text);
+	const rawText = chunk.toString("utf8");
+	appendLog(session, rawText);
+
+	const text = stripAnsi(rawText);
 
 	if (!session.verificationUrl) {
-		const urlMatch = text.match(/https?:\/\/[^\s)]+/i);
+		const urlMatch = text.match(/https?:\/\/\S+/i);
 		if (urlMatch) {
-			session.verificationUrl = urlMatch[0];
+			session.verificationUrl = urlMatch[0].replace(/[).,;:]+$/, "");
 		}
 	}
 
 	if (!session.userCode) {
+		// 하이픈 포함 대문자 코드 패턴 우선 (예: 4BYW-ERHZ5)
 		const codeMatch =
-			text.match(/(?:code|enter this code)[^A-Z0-9-]*([A-Z0-9-]{4,})/i) ||
-			text.match(/\b([A-Z0-9]{4,}(?:-[A-Z0-9]{4,})+)\b/);
+			text.match(/\b([A-Z0-9]{4,}(?:-[A-Z0-9]{2,})+)\b/) ||
+			// "one-time code" 또는 "Enter this code" 다음 줄의 코드
+			text.match(/(?:one-time code|enter this code|your code)[^\n]*\n\s*([A-Z0-9][A-Z0-9-]{3,})/i);
 		if (codeMatch) {
 			session.userCode = codeMatch[1];
 		}
@@ -703,7 +711,7 @@ function sessionToClient(session) {
 }
 
 function appendLog(session, text) {
-	const lines = String(text || "")
+	const lines = stripAnsi(String(text || ""))
 		.split(/\r?\n/)
 		.map((line) => line.trimEnd())
 		.filter(Boolean);
