@@ -1,50 +1,48 @@
-# Windows 호스트 설정
+# Windows Host Setup
 
-이 문서는 `D:\Project\N8N_SERVER` 같은 Windows n8n 런타임을 `D:\Project\N8N_SERVER\n8n_server_github` 아래의 공용 커스텀 노드 저장소에 연결하는 방법을 설명합니다.
+This guide connects a Windows n8n runtime such as `D:\Project\N8N_SERVER` to the shared custom node repository at `D:\Project\N8N_SERVER\n8n_server_github`.
 
-## 1. 공용 커스텀 노드 의존성 설치
+## 1. Install shared custom-node dependencies
 
 ```powershell
 cd D:\Project\N8N_SERVER\n8n_server_github
 npm install
 ```
 
-## 2. 로컬 n8n 런타임이 shared repo를 보도록 설정
+## 2. Point the local n8n runtime at the shared repo
 
-Windows 호스트의 로컬 `.env`에 아래 값을 설정합니다.
+Set this in the Windows host's local `.env`:
 
 ```text
 N8N_CUSTOM_EXTENSIONS=D:/Project/N8N_SERVER/n8n_server_github/custom
 ```
 
-나머지 런타임 전용 설정은 shared repo가 아니라 로컬 런타임 폴더에서 관리해야 합니다.
+Keep the rest of the runtime-specific settings in the local runtime folder, not in this shared repo.
+Run `npm install` only in `D:\Project\N8N_SERVER\n8n_server_github`, never in `custom\codex`.
 
-## 3. 호스트 로컬 상태는 로컬에만 보관
+By default, the Codex nodes use the host runtime folder as their working directory because that is where n8n starts.
+If a workflow should operate on the shared repo itself, set the node's `Working Directory` explicitly to `D:\Project\N8N_SERVER\n8n_server_github`.
 
-아래 항목은 Windows 호스트에서 커밋하지 마세요.
+## 3. Keep host-local state local
+
+Do not commit these from the Windows host:
 
 - `.env`
 - `.npmrc`
 - `data/`
 - `tmp/`
 - `workflow/`
-- 로컬 인증서
-- 호스트 `CODEX_HOME`
+- local certificates
 
-## 4. Codex 인증
+## 4. Codex authentication
 
-`Saved Codex Auth`를 쓸 경우, 반드시 Windows 호스트에서 직접 로그인해야 합니다.
+n8n Credentials에서 **Codex ChatGPT Account** credential을 생성하고 Connect를 눌러 로그인하세요. 인증 상태는 `data/codex-profiles/{profileKey}/codex-home`에 계정별로 격리되어 저장됩니다.
 
-```powershell
-$env:CODEX_HOME='D:\Project\N8N_SERVER\data\codex-home'
-codex login
-```
+`codex`가 PATH에 없으면 credential의 `Codex Executable Path`에 직접 경로를 입력하거나 `CODEX_CLI_PATH` 환경변수를 지정하세요.
 
-`codex`가 `PATH`에 없으면 n8n credential의 `Codex Executable Path`를 설정하거나, 호스트 로컬 `CODEX_BINARY_PATH`를 지정하세요.
+## 5. Verification
 
-## 5. 검증
-
-Windows n8n 런타임 폴더에서 아래 명령을 실행합니다.
+Run these from the Windows n8n runtime folder:
 
 ```powershell
 cd D:\Project\N8N_SERVER
@@ -52,16 +50,16 @@ npm run check:codex-node
 npm run export:codex-nodes
 ```
 
-내보내기 결과에는 아래 노드가 포함되어야 합니다.
+The export should include:
 
 - `CUSTOM.codexAgent`
 - `CUSTOM.codexAgentTool`
 - `CUSTOM.codexMemory`
 - `CUSTOM.codexMcpToolset`
 
-## 6. 권장 런타임 분리 방식
+## 6. Recommended runtime split
 
-- `D:\Project\N8N_SERVER`: n8n 런타임, DB, 로그, 로컬 스크립트, 로컬 상태
-- `D:\Project\N8N_SERVER\n8n_server_github`: 공용 커스텀 노드 소스, 공용 의존성, 공용 문서
+- `D:\Project\N8N_SERVER`: n8n runtime, DB, logs, local scripts, local state
+- `D:\Project\N8N_SERVER\n8n_server_github`: shared custom node source, shared dependencies, and docs
 
-커스텀 노드 수정은 항상 shared repo에서만 진행하세요.
+Make changes to custom nodes only in the shared repo.

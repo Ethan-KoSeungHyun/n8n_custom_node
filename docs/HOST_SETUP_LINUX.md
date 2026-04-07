@@ -1,75 +1,74 @@
-# Linux 호스트 설정
+# Linux Host Setup
 
-이 문서는 Linux n8n 런타임을 공용 커스텀 노드 저장소 클론과 연결하는 방법을 설명합니다.
+This guide connects a Linux n8n runtime to the shared custom node repository clone.
 
-## 1. 공용 저장소 클론
+## 1. Clone the shared repository
 
-예시:
+Example:
 
 ```bash
 git clone <your-remote-url> /srv/N8N_SERVER/n8n_server_github
 ```
 
-## 2. 공용 커스텀 노드 의존성 설치
+## 2. Install shared custom-node dependencies
 
 ```bash
 cd /srv/N8N_SERVER/n8n_server_github
 npm install
 ```
 
-## 3. Linux n8n 런타임이 shared repo를 보도록 설정
+## 3. Point the Linux n8n runtime at the shared repo
 
-Linux 호스트의 로컬 `.env` 또는 서비스 환경 변수에 아래 값을 설정합니다.
+Set this in the Linux host's local `.env` or service environment:
 
 ```text
 N8N_CUSTOM_EXTENSIONS=/srv/N8N_SERVER/n8n_server_github/custom
 ```
 
-n8n 런타임, DB, 로그, 서비스 매니저 파일은 shared repo 밖에서 관리하세요.
+Keep the n8n runtime, DB, logs, and service-manager files outside the shared repo.
+Run `npm install` only in `/srv/N8N_SERVER/n8n_server_github`, never in `custom/codex`.
 
-## 4. 호스트 로컬 Codex 상태
+By default, the Codex nodes use the host runtime folder as their working directory because that is where n8n starts.
+If a workflow should operate on the shared repo itself, set the node's `Working Directory` explicitly to `/srv/N8N_SERVER/n8n_server_github`.
 
-권장되는 호스트 로컬 값 예시:
+## 4. Host-local Codex state
 
-```text
-CODEX_HOME=/var/lib/n8n/codex-home
-```
+각 Codex 계정 인증은 n8n Credentials에서 **Codex ChatGPT Account** credential을 생성하고 Connect를 눌러 완료하세요. 인증 상태는 `data/codex-profiles/{profileKey}/codex-home`에 계정별로 격리되어 저장됩니다.
 
-`Saved Codex Auth`는 호스트별이므로, Windows와 별개로 Linux 호스트에서도 `codex login`을 실행해야 합니다.
+`codex`가 PATH에 없으면 credential의 `Codex Executable Path`에 직접 경로를 입력하거나 `CODEX_CLI_PATH` 환경변수를 지정하세요.
 
-`codex`가 `PATH`에 없으면 credential의 `Codex Executable Path`를 설정하거나, 호스트 로컬 `CODEX_BINARY_PATH`를 지정하세요.
+## 5. Permissions
 
-## 5. 권한
+Make sure the Linux service user can read:
 
-Linux 서비스 사용자는 아래 경로를 읽을 수 있어야 합니다.
+- the shared repo clone
+- any CA bundle path or skills path you reference
 
-- shared repo clone 경로
-- 설정된 `CODEX_HOME`
-- 사용하는 CA bundle 경로 또는 skills 경로
+And can write:
 
-그리고 아래 경로에는 쓸 수 있어야 합니다.
+- `data/codex-profiles/` (per-credential auth state)
+- the n8n runtime DB/log/state directories
 
-- 호스트 로컬 `CODEX_HOME`
-- n8n 런타임 DB, 로그, 상태 디렉터리
+## 6. Verification
 
-## 6. 검증
-
-Linux n8n 런타임 폴더에서 먼저 아래 명령으로 노드 로딩을 확인합니다.
+From the Linux n8n runtime folder, verify node loading and a simple agent run:
 
 ```bash
 npm run check:codex-node
 npm run export:codex-nodes
 ```
 
-그 다음 아래 항목을 스모크 테스트합니다.
+Then smoke-test:
 
-- `Codex Agent`
+- `Codex CLI > Auth > Status`
+- `Codex Agent` with `Runtime=CLI`
+- `Codex Agent` with `Runtime=SDK`
 - `Auto Resume` over two turns
-- 저장된 서버 또는 로컬 stdio smoke server를 사용하는 `Codex MCP Toolset`
+- `Codex MCP Toolset` with a saved server or the local stdio smoke server
 
-## 7. 운영 모델
+## 7. Operating model
 
-- shared repo: `custom/codex/**` 소스와 문서의 기준 저장소
-- Linux 호스트: 로컬 런타임, `.env`, 프로세스 매니저, DB, 로그, 인증서, `CODEX_HOME`
+- shared repo: source for `custom/codex/**` and docs
+- Linux host: local runtime, `.env`, process manager, DB, logs, certs, and `data/codex-profiles/`
 
-호스트 전용 런타임 파일은 이 shared repo에 넣지 마세요.
+Do not store host-specific runtime files in this shared repo.

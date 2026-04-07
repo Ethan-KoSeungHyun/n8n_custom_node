@@ -52,6 +52,6 @@ npm run export:codex-nodes
 
 ## 참고
 
-- `Saved Codex Auth`는 호스트 간에 자동으로 이동하지 않습니다. 각 호스트에서 다시 로그인해야 합니다.
-- `CODEX_HOME`은 호스트 로컬 상태로 유지해야 합니다.
+- Codex 계정 인증은 n8n Credentials의 **Codex ChatGPT Account**로 관리합니다. 각 호스트에서 Connect를 눌러 다시 로그인해야 합니다.
+- 인증 상태는 `data/codex-profiles/{profileKey}/codex-home`에 호스트 로컬 상태로 유지됩니다.
 - 문제가 생기면 `custom.bak`에서 로컬 폴더를 복원하고, `N8N_CUSTOM_EXTENSIONS`를 임시로 예전 로컬 경로로 되돌릴 수 있습니다.

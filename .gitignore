@@ -1,11 +1,15 @@
 **/.DS_Store
 
 # Host-local runtime and override files
+.env
 .env.local
 .env.*.local
+.npmrc
 local/
 logs/
 tmp/
+/scripts/
+/workflow/
 
 # Workspace-local Codex state
 .codex/*
