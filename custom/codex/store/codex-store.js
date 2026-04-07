@@ -80,6 +80,9 @@ function mapRunRow(row) {
 		promptPreview: row.prompt_preview,
 		model: row.model,
 		codexHome: row.codex_home,
+		profileKey: row.profile_key,
+		resolvedCredentialId: row.resolved_credential_id,
+		authFingerprintAtRun: row.auth_fingerprint_at_run,
 		workingDirectory: row.working_directory,
 		startedAt: row.started_at,
 		endedAt: row.ended_at,
@@ -103,6 +106,9 @@ function mapBindingRow(row) {
 		nodeId: row.node_id,
 		sessionId: row.session_id,
 		codexHome: row.codex_home,
+		profileKey: row.profile_key,
+		resolvedCredentialId: row.resolved_credential_id,
+		authFingerprint: row.auth_fingerprint,
 		workingDirectory: row.working_directory,
 		model: row.model,
 		runtime: row.runtime,
@@ -129,6 +135,9 @@ async function ensureSchema() {
 					node_id TEXT,
 					session_id TEXT NOT NULL,
 					codex_home TEXT,
+					profile_key TEXT,
+					resolved_credential_id TEXT,
+					auth_fingerprint TEXT,
 					working_directory TEXT,
 					model TEXT,
 					runtime TEXT,
@@ -142,7 +151,7 @@ async function ensureSchema() {
 				)
 			`);
 			await dataSource.query(
-				`CREATE INDEX IF NOT EXISTS idx_codex_bindings_lookup ON ${TABLES.sessionBindings} (workflow_id, node_id, session_id)`,
+				`CREATE INDEX IF NOT EXISTS idx_codex_bindings_lookup ON ${TABLES.sessionBindings} (workflow_id, node_id, session_id, profile_key)`,
 			);
 
 			await dataSource.query(`
@@ -160,6 +169,9 @@ async function ensureSchema() {
 					prompt_preview TEXT,
 					model TEXT,
 					codex_home TEXT,
+					profile_key TEXT,
+					resolved_credential_id TEXT,
+					auth_fingerprint_at_run TEXT,
 					working_directory TEXT,
 					started_at TEXT NOT NULL,
 					ended_at TEXT,
@@ -174,7 +186,7 @@ async function ensureSchema() {
 				)
 			`);
 			await dataSource.query(
-				`CREATE INDEX IF NOT EXISTS idx_codex_runs_session ON ${TABLES.runs} (workflow_id, node_id, session_id, started_at)`,
+				`CREATE INDEX IF NOT EXISTS idx_codex_runs_session ON ${TABLES.runs} (workflow_id, node_id, session_id, profile_key, started_at)`,
 			);
 			await dataSource.query(
 				`CREATE INDEX IF NOT EXISTS idx_codex_runs_thread ON ${TABLES.runs} (thread_id, started_at)`,
@@ -212,6 +224,13 @@ async function ensureSchema() {
 			await dataSource.query(
 				`CREATE INDEX IF NOT EXISTS idx_codex_artifacts_run ON ${TABLES.runArtifacts} (run_id, kind, created_at)`,
 			);
+
+			await ensureColumn(TABLES.sessionBindings, "profile_key", "TEXT");
+			await ensureColumn(TABLES.sessionBindings, "resolved_credential_id", "TEXT");
+			await ensureColumn(TABLES.sessionBindings, "auth_fingerprint", "TEXT");
+			await ensureColumn(TABLES.runs, "profile_key", "TEXT");
+			await ensureColumn(TABLES.runs, "resolved_credential_id", "TEXT");
+			await ensureColumn(TABLES.runs, "auth_fingerprint_at_run", "TEXT");
 		})();
 	}
 
@@ -222,6 +241,25 @@ async function queryOne(sql, values) {
 	const dataSource = getDataSource();
 	const rows = await dataSource.query(sql, values);
 	return rows[0] || null;
+}
+
+async function ensureColumn(tableName, columnName, definition) {
+	const dataSource = getDataSource();
+	try {
+		await dataSource.query(
+			`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`,
+		);
+	} catch (error) {
+		const message = String(error?.message || "").toLowerCase();
+		if (
+			message.includes("duplicate column") ||
+			message.includes("already exists") ||
+			message.includes(`column "${columnName.toLowerCase()}" of relation`)
+		) {
+			return;
+		}
+		throw error;
+	}
 }
 
 async function createRun(input) {
@@ -245,6 +283,9 @@ async function createRun(input) {
 		input.promptPreview || null,
 		input.model || null,
 		input.codexHome || null,
+		input.profileKey || null,
+		input.resolvedCredentialId || null,
+		input.authFingerprintAtRun || null,
 		input.workingDirectory || null,
 		startedAt,
 		input.endedAt || null,
@@ -260,7 +301,8 @@ async function createRun(input) {
 	const sql = `
 		INSERT INTO ${TABLES.runs} (
 			id, workflow_id, node_id, execution_id, resource, operation, runtime, status,
-			session_id, thread_id, prompt_preview, model, codex_home, working_directory,
+			session_id, thread_id, prompt_preview, model, codex_home, profile_key,
+			resolved_credential_id, auth_fingerprint_at_run, working_directory,
 			started_at, ended_at, duration_ms, input_tokens, cached_input_tokens, output_tokens,
 			stderr, final_response, error_message, metadata_json
 		) VALUES (
@@ -338,6 +380,9 @@ async function upsertSessionBinding(input) {
 		input.nodeId || null,
 		input.sessionId,
 		input.codexHome || null,
+		input.profileKey || null,
+		input.resolvedCredentialId || null,
+		input.authFingerprint || null,
 		input.workingDirectory || null,
 		input.model || null,
 		input.runtime || null,
@@ -352,7 +397,8 @@ async function upsertSessionBinding(input) {
 	const sql = `
 		INSERT INTO ${TABLES.sessionBindings} (
 			id, binding_key, workflow_id, node_id, session_id, codex_home,
-			working_directory, model, runtime, thread_id, last_run_id, status,
+			profile_key, resolved_credential_id, auth_fingerprint, working_directory,
+			model, runtime, thread_id, last_run_id, status,
 			recovery_count, created_at, updated_at, last_used_at
 		) VALUES (
 			${values.map((_, index) => placeholder(driverKind, index + 1)).join(", ")}
@@ -362,6 +408,9 @@ async function upsertSessionBinding(input) {
 			node_id = excluded.node_id,
 			session_id = excluded.session_id,
 			codex_home = excluded.codex_home,
+			profile_key = excluded.profile_key,
+			resolved_credential_id = excluded.resolved_credential_id,
+			auth_fingerprint = excluded.auth_fingerprint,
 			working_directory = excluded.working_directory,
 			model = excluded.model,
 			runtime = excluded.runtime,
@@ -451,7 +500,12 @@ async function listRecentTranscriptEntries(input) {
 	const dataSource = getDataSource();
 	const driverKind = getDriverKind(dataSource);
 	const limit = Math.max(1, Math.min(Number(input.limit || 5), 20));
-	const sql = `
+	const values = [
+		input.workflowId || null,
+		input.nodeId || null,
+		input.sessionId,
+	];
+	let sql = `
 		SELECT prompt_preview, final_response, started_at
 		FROM ${TABLES.runs}
 		WHERE workflow_id = ${placeholder(driverKind, 1)}
@@ -459,14 +513,16 @@ async function listRecentTranscriptEntries(input) {
 			AND session_id = ${placeholder(driverKind, 3)}
 			AND status = 'completed'
 			AND final_response IS NOT NULL
+	`;
+	if (input.profileKey) {
+		values.push(input.profileKey);
+		sql += ` AND profile_key = ${placeholder(driverKind, values.length)}`;
+	}
+	sql += `
 		ORDER BY started_at DESC
 		LIMIT ${limit}
 	`;
-	const rows = await dataSource.query(sql, [
-		input.workflowId || null,
-		input.nodeId || null,
-		input.sessionId,
-	]);
+	const rows = await dataSource.query(sql, values);
 
 	return rows
 		.map((row) => ({

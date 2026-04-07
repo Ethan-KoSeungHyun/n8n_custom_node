@@ -1,12 +1,7 @@
 "use strict";
 
-const fs = require("node:fs");
 const fsp = require("node:fs/promises");
-const os = require("node:os");
 const path = require("node:path");
-
-const WORKSPACE_CODEX_HOME_SEGMENTS = ["data", "codex-home"];
-const DEFAULT_CODEX_HOME_DIRNAME = ".codex";
 
 function ensureObject(value, label) {
 	if (value === null || Array.isArray(value) || typeof value !== "object") {
@@ -71,50 +66,12 @@ function resolvePathMaybeRelative(baseDir, targetPath) {
 		: path.resolve(baseDir, targetPath);
 }
 
-function resolveCodexHome({ scope, customPath, workspaceRoot }) {
-	if (scope === "systemDefault") {
-		return "";
-	}
-
-	if (scope === "customPath") {
-		return resolvePathMaybeRelative(workspaceRoot, customPath);
-	}
-
-	return path.join(workspaceRoot, ...WORKSPACE_CODEX_HOME_SEGMENTS);
-}
-
-function resolveSystemCodexHome() {
-	return path.join(os.homedir(), DEFAULT_CODEX_HOME_DIRNAME);
-}
-
 async function ensureDirectory(directoryPath) {
 	if (!directoryPath) {
 		return;
 	}
 
 	await fsp.mkdir(directoryPath, { recursive: true });
-}
-
-async function syncSavedAuthToCodexHome(codexHome) {
-	if (!codexHome) return false;
-
-	const sourcePath = path.join(resolveSystemCodexHome(), "auth.json");
-	const targetPath = path.join(codexHome, "auth.json");
-
-	if (sourcePath === targetPath) return false;
-	if (!fs.existsSync(sourcePath)) return false;
-	if (fs.existsSync(targetPath)) return false;
-
-	let sourceContent = "";
-	try {
-		sourceContent = await fsp.readFile(sourcePath, "utf8");
-	} catch {
-		return false;
-	}
-
-	await ensureDirectory(codexHome);
-	await fsp.writeFile(targetPath, sourceContent, { mode: 0o600 });
-	return true;
 }
 
 function parseJsonOutput(rawValue, label) {
@@ -144,9 +101,6 @@ module.exports = {
 	parseOptionalJsonArray,
 	parseOptionalJsonObject,
 	parseStringList,
-	resolveCodexHome,
 	resolvePathMaybeRelative,
-	resolveSystemCodexHome,
 	setConfigValue,
-	syncSavedAuthToCodexHome,
 };

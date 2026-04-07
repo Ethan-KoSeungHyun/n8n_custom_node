@@ -92,6 +92,9 @@ function buildRunResultPayload(request, result, artifacts, storedEventCount, ses
 		runtime: request.runtime,
 		threadId: result.threadId || null,
 		sessionId: request.sessionId || null,
+		profileKey: request.profileKey || null,
+		resolvedCredentialId: request.resolvedCredentialId || null,
+		authFingerprintAtRun: request.authFingerprintAtRun || null,
 		finalResponse: result.finalResponse || "",
 		parsedFinalResponse: result.parsedFinalResponse || null,
 		usage: result.usage || null,
@@ -147,6 +150,9 @@ async function executeRecoveredRun(request) {
 		nodeId: request.nodeId,
 		sessionId: request.sessionId,
 		codexHome: request.codexHome,
+		profileKey: request.profileKey || null,
+		resolvedCredentialId: request.resolvedCredentialId || null,
+		authFingerprint: request.authFingerprintAtRun || null,
 		workingDirectory: request.workingDirectory,
 		model: request.model || null,
 		runtime: request.runtime,
@@ -208,6 +214,7 @@ async function executeAgentRun(request) {
 					workflowId: request.workflowId || null,
 					nodeId: request.nodeId || null,
 					sessionId: request.sessionId,
+					profileKey: request.profileKey || null,
 					codexHome: request.codexHome || null,
 					workingDirectory: request.workingDirectory,
 			  })
@@ -220,6 +227,7 @@ async function executeAgentRun(request) {
 			workflowId: request.workflowId,
 			nodeId: request.nodeId,
 			sessionId: request.sessionId,
+			profileKey: request.profileKey || null,
 			limit: request.memory.contextWindowLength || 5,
 		});
 	}
@@ -238,10 +246,14 @@ async function executeAgentRun(request) {
 		promptPreview: truncatePrompt(request.prompt),
 		model: request.model || null,
 		codexHome: request.codexHome || null,
+		profileKey: request.profileKey || null,
+		resolvedCredentialId: request.resolvedCredentialId || null,
+		authFingerprintAtRun: request.authFingerprintAtRun || null,
 		workingDirectory: request.workingDirectory,
 		metadata: {
 			sessionStrategy: request.sessionStrategy,
 			streaming: Boolean(request.options?.streaming),
+			credentialType: request.credentialType || null,
 		},
 	});
 
@@ -274,6 +286,9 @@ async function executeAgentRun(request) {
 				nodeId: request.nodeId,
 				sessionId: request.sessionId,
 				codexHome: request.codexHome,
+				profileKey: request.profileKey || null,
+				resolvedCredentialId: request.resolvedCredentialId || null,
+				authFingerprint: request.authFingerprintAtRun || null,
 				workingDirectory: request.workingDirectory,
 				model: request.model || null,
 				runtime,

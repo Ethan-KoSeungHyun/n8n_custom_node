@@ -18,7 +18,6 @@ const {
 	getBaseNodeContext,
 	getConnectedCodexMemory,
 	getConnectedCodexToolsets,
-	parseJsonObjectOrEmpty,
 	readCommonOptions,
 	resolveModelField,
 	resolveSessionIdField,
@@ -64,11 +63,18 @@ class CodexAgentTool {
 		],
 		outputs: [NodeConnectionTypes.AiTool],
 		outputNames: ["Tool"],
-		credentials: [{ name: "codexApi", required: true }],
+		credentials: [{ name: "codexChatgptAccount", required: true }],
 		properties: [
 			{
 				displayName:
-					"Recommended for sub-agent use: keep Session Strategy as Always New and Ephemeral enabled unless you explicitly want reusable Codex threads.",
+					'이 tool이 호출될 때 사용할 실제 ChatGPT 로그인 주체를 분리하려면 <strong>Codex ChatGPT Account</strong> credential을 선택하세요.',
+				name: "credentialModeNotice",
+				type: "notice",
+				default: "",
+			},
+			{
+				displayName:
+					"서브 에이전트 용도라면 Session Strategy는 Always New로, Ephemeral은 켠 상태로 두는 것을 권장합니다. 명시적으로 같은 Codex thread를 이어야 할 때만 바꾸세요.",
 				name: "recommendedToolSetupNotice",
 				type: "notice",
 				default: "",
@@ -81,7 +87,7 @@ class CodexAgentTool {
 				placeholder: "codex_worker",
 				validateType: "string-alphanumeric",
 				description:
-					"Tool name exposed to the parent AI agent. Letters, numbers, and underscores only",
+					"부모 AI 에이전트에게 노출되는 tool 이름입니다. 영문자, 숫자, 밑줄만 사용할 수 있습니다.",
 			},
 			{
 				displayName: "Description",
@@ -90,6 +96,8 @@ class CodexAgentTool {
 				typeOptions: { rows: 3 },
 				default:
 					"Use this tool when you need a code-aware sub-agent that can inspect files, use Codex MCP servers, and return a focused result.",
+				description:
+					"부모 에이전트가 이 tool을 언제 써야 하는지 설명합니다.",
 			},
 			{
 				displayName: "System Prompt",
@@ -98,7 +106,7 @@ class CodexAgentTool {
 				typeOptions: { rows: 4 },
 				default: "",
 				description:
-					"Optional persistent instructions for how this Codex tool should behave when called by a parent agent",
+					"부모 에이전트가 이 tool을 호출할 때 항상 적용할 추가 지침입니다.",
 			},
 			{
 				displayName: "Model Preset",
@@ -106,7 +114,7 @@ class CodexAgentTool {
 				type: "options",
 				default: "",
 				description:
-					"Choose a common Codex/OpenAI coding model preset. Use Custom Override for legacy or manually specified model names",
+					"자주 쓰는 Codex/OpenAI 모델 프리셋을 선택합니다. 예전 모델명이나 직접 입력이 필요하면 Custom Override를 사용하세요.",
 				options: [
 					{
 						name: "Default (Environment Default)",
@@ -152,32 +160,10 @@ class CodexAgentTool {
 				type: "string",
 				default: "",
 				description:
-					"Only used when Model Preset is set to Custom Override, or to preserve older workflows that already stored a manual model value",
+					"Model Preset이 Custom Override일 때만 사용합니다. 예전 워크플로에 직접 저장된 모델명을 유지할 때도 사용됩니다.",
 				displayOptions: {
 					show: {
 						modelPreset: ["__custom__"],
-					},
-				},
-			},
-			{
-				displayName: "State Scope",
-				name: "stateScope",
-				type: "options",
-				default: "workspaceScoped",
-				options: [
-					{ name: "Workspace Scoped (Recommended)", value: "workspaceScoped" },
-					{ name: "System Default", value: "systemDefault" },
-					{ name: "Custom Path", value: "customPath" },
-				],
-			},
-			{
-				displayName: "Custom CODEX_HOME",
-				name: "customCodexHome",
-				type: "string",
-				default: "",
-				displayOptions: {
-					show: {
-						stateScope: ["customPath"],
 					},
 				},
 			},
@@ -187,7 +173,7 @@ class CodexAgentTool {
 				type: "string",
 				default: "",
 				description:
-					"Absolute path or workspace-relative path. Leave empty to use the current n8n process directory and workspace root",
+					"절대 경로나 워크스페이스 기준 상대 경로를 입력합니다. 비워 두면 현재 n8n 프로세스의 작업 디렉터리를 사용합니다.",
 			},
 			{
 				displayName: "Session Strategy",
@@ -201,7 +187,7 @@ class CodexAgentTool {
 					{ name: "Last Thread", value: "lastThread" },
 				],
 				description:
-					"Always New is recommended for sub-agent use so parent agents do not accidentally share state",
+					"부모 에이전트 간 상태가 섞이지 않도록 서브 에이전트 용도에서는 Always New를 권장합니다.",
 			},
 			{
 				displayName: "Default Session ID",
@@ -209,7 +195,7 @@ class CodexAgentTool {
 				type: "string",
 				default: "={{ $json.sessionId }}",
 				description:
-					"Used only when the tool input does not provide sessionId and Session Strategy is Auto Resume",
+					"tool 입력에서 sessionId를 주지 않았고 Session Strategy가 Auto Resume일 때만 사용됩니다.",
 				displayOptions: {
 					show: {
 						sessionStrategy: ["autoResume"],
@@ -222,7 +208,7 @@ class CodexAgentTool {
 				type: "string",
 				default: "",
 				description:
-					"Use only when you already know the exact Codex thread ID to continue",
+					"이어갈 정확한 Codex thread ID를 이미 알고 있을 때만 사용하세요.",
 				displayOptions: {
 					show: {
 						sessionStrategy: ["specificThreadId"],
@@ -236,7 +222,7 @@ class CodexAgentTool {
 				typeOptions: { rows: 6 },
 				default: "",
 				description:
-					"Optional JSON Schema for the final response. When set, the tool returns the parsed JSON text if available",
+					"최종 응답 형식을 강제할 선택형 JSON Schema입니다. 가능하면 파싱된 JSON 결과도 함께 반환합니다.",
 			},
 			...buildToolOptionFields(),
 		],
@@ -349,8 +335,12 @@ function createTool(context, itemIndex, log = true) {
 				workflowId: base.workflowId,
 				nodeId: base.nodeId,
 				executionId: base.executionId,
+				credentialType: base.credentialType,
+				resolvedCredentialId: base.credentialRef?.id || null,
 				credentials: base.credentials,
 				codexHome: base.codexHome,
+				profileKey: base.profileKey || null,
+				authFingerprintAtRun: base.authFingerprint || null,
 				env: base.env,
 				workingDirectory: base.workingDirectory,
 				prompt: query.prompt,
@@ -378,6 +368,11 @@ function createTool(context, itemIndex, log = true) {
 				runId: result.runId,
 				threadId: result.threadId,
 				sessionId: result.sessionId,
+				credentialType: base.credentialType,
+				credentialId: base.credentialRef?.id || null,
+				credentialName: base.credentialRef?.name || null,
+				profileKey: base.profileKey || null,
+				authFingerprint: base.authFingerprint || null,
 				runtime: result.runtime,
 				usage: result.usage || null,
 				eventPayloadDetail: result.eventPayloadDetail || "summary",
@@ -468,7 +463,7 @@ function buildToolOptionFields() {
 			type: "options",
 			default: "workspace-write",
 			description:
-				"Controls whether the Codex sub-agent can only read files, write inside the workspace, or access the system more broadly",
+				"Codex 서브 에이전트가 파일을 읽기만 할지, 워크스페이스 안에서 쓰기까지 할지, 더 넓은 시스템 접근을 허용할지 정합니다.",
 			options: [
 				{ name: "Read Only", value: "read-only" },
 				{ name: "Workspace Write", value: "workspace-write" },
@@ -481,7 +476,7 @@ function buildToolOptionFields() {
 			type: "options",
 			default: "on-request",
 			description:
-				"Controls when Codex should ask for approval before sensitive actions",
+				"민감한 작업 전에 언제 사용자 승인을 요청할지 정합니다.",
 			options: [
 				{ name: "Never", value: "never" },
 				{ name: "On Request", value: "on-request" },
@@ -495,7 +490,7 @@ function buildToolOptionFields() {
 			type: "options",
 			default: "live",
 			description:
-				"Controls whether Codex may use web search while serving the parent agent",
+				"부모 에이전트를 처리하는 동안 웹 검색을 사용할 수 있는지 정합니다.",
 			options: [
 				{ name: "Live", value: "live" },
 				{ name: "Cached", value: "cached" },
@@ -508,7 +503,7 @@ function buildToolOptionFields() {
 			type: "options",
 			default: "medium",
 			description:
-				"Higher effort can improve harder tasks at the cost of more time and tokens",
+				"값이 높을수록 어려운 작업의 품질은 좋아질 수 있지만 시간과 토큰을 더 사용합니다.",
 			options: [
 				{ name: "Minimal", value: "minimal" },
 				{ name: "Low", value: "low" },
@@ -523,7 +518,7 @@ function buildToolOptionFields() {
 			type: "options",
 			default: "medium",
 			description:
-				"Controls how terse or detailed the Codex response should be",
+				"Codex 응답을 얼마나 짧게 또는 자세하게 만들지 정합니다.",
 			options: [
 				{ name: "Low", value: "low" },
 				{ name: "Medium", value: "medium" },
@@ -536,7 +531,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: true,
 			description:
-				"Use an isolated run by default so this tool behaves like a sub-agent",
+				"기본적으로 격리 실행을 사용해 이 tool이 독립된 서브 에이전트처럼 동작하게 합니다.",
 		},
 		{
 			displayName: "Full Auto",
@@ -544,7 +539,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Let Codex act more autonomously within the chosen sandbox and approval policy",
+				"선택한 sandbox와 approval policy 안에서 Codex가 더 자율적으로 행동하게 합니다.",
 		},
 		{
 			displayName: "Include Events In Output",
@@ -552,7 +547,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				'Add raw SDK thread events to the returned tool payload for debugging. This does not populate n8n\'s Logs panel; it only changes the returned output.',
+				'디버깅용으로 SDK thread 이벤트 원문을 반환 payload에 포함합니다. n8n의 Logs 패널을 채우는 것은 아니고, 반환 결과에만 추가됩니다.',
 		},
 		{
 			displayName: "Event Payload Detail",
@@ -560,7 +555,7 @@ function buildToolOptionFields() {
 			type: "options",
 			default: "summary",
 			description:
-				'Controls whether the "events" output contains lightweight previews or the full raw event payloads',
+				'"events" 출력에 요약만 넣을지, 원본 payload 전체를 넣을지 정합니다.',
 			options: [
 				{ name: "Summary", value: "summary" },
 				{ name: "Full Raw Payload", value: "full" },
@@ -577,7 +572,7 @@ function buildToolOptionFields() {
 			type: "number",
 			default: 400,
 			description:
-				"When Event Payload Detail is Summary, long event text and MCP payloads are truncated to this length",
+				'Event Payload Detail이 Summary일 때 긴 이벤트 텍스트와 MCP payload를 이 길이까지 잘라서 반환합니다.',
 			displayOptions: {
 				show: {
 					includeEvents: [true],
@@ -591,7 +586,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Use the SDK streaming path. When the current n8n execution UI supports live chunks, assistant text can stream during the run; otherwise the stream is still collected internally and returned at the end.",
+				"SDK 스트리밍 경로를 사용합니다. 현재 n8n 실행 UI가 실시간 청크 표시를 지원하면 응답이 진행 중에 바로 보이고, 그렇지 않으면 내부적으로만 스트리밍한 뒤 마지막에 한 번에 반환합니다.",
 		},
 		{
 			displayName: "Skip Git Repo Check",
@@ -599,7 +594,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Leave off for normal use. Non-Git working directories are auto-detected and skipped automatically; enable only to force the bypass",
+				"보통은 끄고 사용하세요. Git 저장소가 아닌 작업 디렉터리는 자동으로 감지해 건너뜁니다. 강제로 검사 우회를 시키고 싶을 때만 켜세요.",
 		},
 		{
 			displayName: "Enable Network Access",
@@ -607,7 +602,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Allow Codex to access the network when the runtime and sandbox support it",
+				"런타임과 sandbox가 허용하는 범위에서 Codex의 네트워크 접근을 허용합니다.",
 		},
 		{
 			displayName: "Additional Directories",
@@ -616,7 +611,7 @@ function buildToolOptionFields() {
 			typeOptions: { rows: 3 },
 			default: "",
 			description:
-				"Comma or newline separated paths that Codex may also read from or use",
+				"Codex가 추가로 읽거나 사용할 수 있는 경로 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
 		},
 		{
 			displayName: "Auto Compact Token Limit",
@@ -624,7 +619,7 @@ function buildToolOptionFields() {
 			type: "number",
 			default: 0,
 			description:
-				"Optional token threshold for compaction. Leave 0 to keep the Codex default behavior",
+				"자동 compact를 시작할 토큰 기준값입니다. 0이면 Codex 기본 동작을 유지합니다.",
 		},
 		{
 			displayName: "Parse Final Response As JSON",
@@ -632,7 +627,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: true,
 			description:
-				"Try to parse the final response as JSON and return it in parsed output",
+				"최종 응답을 JSON으로 파싱해 parsed 결과와 함께 반환합니다.",
 		},
 		{
 			displayName: "Use Workspace Skills",
@@ -640,7 +635,7 @@ function buildToolOptionFields() {
 			type: "boolean",
 			default: true,
 			description:
-				"If a .codex/skills folder exists in the working directory, expose it to Codex automatically",
+				"작업 디렉터리에 `.codex/skills` 폴더가 있으면 자동으로 Codex에 노출합니다.",
 		},
 		{
 			displayName: "Additional Skill Paths",
@@ -649,7 +644,7 @@ function buildToolOptionFields() {
 			typeOptions: { rows: 3 },
 			default: "",
 			description:
-				"Comma or newline separated skill directories to expose in addition to workspace skills",
+				"워크스페이스 skill 외에 추가로 노출할 skill 디렉터리 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
 		},
 		{
 			displayName: "Advanced Config JSON",
@@ -658,16 +653,7 @@ function buildToolOptionFields() {
 			typeOptions: { rows: 6 },
 			default: "",
 			description:
-				"Advanced escape hatch for raw Codex config overrides when the first-class fields are not enough",
-		},
-		{
-			displayName: "Legacy Options JSON",
-			name: "optionsJson",
-			type: "string",
-			typeOptions: { rows: 6 },
-			default: "",
-			description:
-				"Compatibility escape hatch for older Codex node options",
+				"기본 필드만으로 부족할 때 raw Codex config를 직접 덮어쓸 수 있는 고급 설정입니다.",
 		},
 		{
 			displayName: "Extra Environment JSON",
@@ -676,7 +662,7 @@ function buildToolOptionFields() {
 			typeOptions: { rows: 4 },
 			default: "",
 			description:
-				'Optional JSON object of environment variables to inject into the Codex process, for example {"HTTPS_PROXY":"http://proxy:8080"}',
+				'Codex 프로세스에 추가로 주입할 환경 변수 JSON입니다. 예: {"HTTPS_PROXY":"http://proxy:8080"}',
 		},
 	];
 }

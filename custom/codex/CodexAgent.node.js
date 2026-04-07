@@ -63,25 +63,32 @@ class CodexAgent {
 			},
 		],
 		outputs: [NodeConnectionTypes.Main],
-		credentials: [{ name: "codexApi", required: true }],
+		credentials: [{ name: "codexChatgptAccount", required: true }],
 		properties: [
 			{
 				displayName:
-					"Recommended for chat workflows: keep State Scope as Workspace Scoped, Session Strategy as Auto Resume, and Session ID as {{$json.sessionId}}.",
+					'워크플로마다 실제 ChatGPT 로그인 주체를 분리하려면 <strong>Codex ChatGPT Account</strong> credential을 선택하세요.',
+				name: "credentialModeNotice",
+				type: "notice",
+				default: "",
+			},
+			{
+				displayName:
+					'채팅 워크플로에서는 <strong>Session Strategy = Auto Resume</strong>, <strong>Session ID = {{$json.sessionId}}</strong> 구성을 권장합니다.',
 				name: "recommendedSetupNotice",
 				type: "notice",
 				default: "",
 			},
 			{
 				displayName:
-					"Codex Agent is the main SDK-based conversational node. Connect Codex Memory for session continuity and Codex MCP Toolset for MCP servers.",
+					"Codex Agent는 SDK 기반의 메인 대화형 노드입니다. 세션 연속성이 필요하면 Codex Memory를 연결하고, MCP 서버를 쓰려면 Codex MCP Toolset을 연결하세요.",
 				name: "memoryAndToolNotice",
 				type: "notice",
 				default: "",
 			},
 			{
 				displayName:
-					'Live streaming in n8n chat requires the upstream "When chat message received" trigger to use Response Mode = Streaming. If the chat workflow runs in Last Node or Response Nodes mode, Codex still streams internally but the UI only renders the final result.',
+					'`n8n chat`에서 실시간 스트리밍을 보려면 앞단 `When chat message received` 트리거에서 <strong>Response Mode = Streaming</strong>을 사용해야 합니다. `Last Node` 또는 `Response Nodes` 모드에서는 내부적으로 스트리밍하더라도 UI에는 최종 결과만 보입니다.',
 				name: "streamingModeNotice",
 				type: "notice",
 				default: "",
@@ -94,7 +101,7 @@ class CodexAgent {
 				default:
 					"={{ $json.chatInput || $json.prompt || $json.text || $json.message || $json.query || $json.input || '' }}",
 				required: true,
-				description: "The main user request or task sent to Codex",
+				description: "Codex에 전달할 메인 요청 또는 작업 내용입니다.",
 			},
 			{
 				displayName: "System Instructions",
@@ -103,7 +110,7 @@ class CodexAgent {
 				typeOptions: { rows: 4 },
 				default: "",
 				description:
-					"Optional persistent guidance applied before the prompt, for example response style or task boundaries",
+					"Prompt 앞에 항상 붙는 추가 지침입니다. 응답 스타일, 작업 범위, 금지 사항 등을 넣을 때 사용합니다.",
 			},
 			{
 				displayName: "Model Preset",
@@ -111,7 +118,7 @@ class CodexAgent {
 				type: "options",
 				default: "",
 				description:
-					"Choose a common Codex/OpenAI coding model preset. Use Custom Override for legacy or manually specified model names",
+					"자주 쓰는 Codex/OpenAI 모델 프리셋을 선택합니다. 예전 모델명이나 직접 입력이 필요하면 Custom Override를 사용하세요.",
 				options: [
 					{
 						name: "Default (Environment Default)",
@@ -157,32 +164,10 @@ class CodexAgent {
 				type: "string",
 				default: "",
 				description:
-					"Only used when Model Preset is set to Custom Override, or to preserve older workflows that already stored a manual model value",
+					"Model Preset이 Custom Override일 때만 사용합니다. 예전 워크플로에 직접 저장된 모델명을 유지할 때도 사용됩니다.",
 				displayOptions: {
 					show: {
 						modelPreset: ["__custom__"],
-					},
-				},
-			},
-			{
-				displayName: "State Scope",
-				name: "stateScope",
-				type: "options",
-				default: "workspaceScoped",
-				options: [
-					{ name: "Workspace Scoped (Recommended)", value: "workspaceScoped" },
-					{ name: "System Default", value: "systemDefault" },
-					{ name: "Custom Path", value: "customPath" },
-				],
-			},
-			{
-				displayName: "Custom CODEX_HOME",
-				name: "customCodexHome",
-				type: "string",
-				default: "",
-				displayOptions: {
-					show: {
-						stateScope: ["customPath"],
 					},
 				},
 			},
@@ -192,7 +177,7 @@ class CodexAgent {
 				type: "string",
 				default: "",
 				description:
-					"Absolute path or workspace-relative path. Leave empty to use the current n8n process directory and workspace root",
+					"절대 경로나 워크스페이스 기준 상대 경로를 입력합니다. 비워 두면 현재 n8n 프로세스의 작업 디렉터리를 사용합니다.",
 			},
 			{
 				displayName: "Session Strategy",
@@ -206,7 +191,7 @@ class CodexAgent {
 					{ name: "Last Thread", value: "lastThread" },
 				],
 				description:
-					"Auto Resume is recommended for chat-style workflows so the same session can continue over time",
+					"채팅형 워크플로에서는 같은 세션을 이어가기 쉽도록 Auto Resume을 권장합니다.",
 			},
 			{
 				displayName: "Session ID",
@@ -214,7 +199,7 @@ class CodexAgent {
 				type: "string",
 				default: "={{ $json.sessionId }}",
 				description:
-					"The stable chat or user session key. With Auto Resume, this maps to a saved Codex thread automatically",
+					"채팅 또는 사용자 세션을 구분하는 고정 키입니다. Auto Resume일 때 저장된 Codex thread와 자동으로 연결됩니다.",
 				displayOptions: {
 					show: {
 						sessionStrategy: ["autoResume"],
@@ -227,7 +212,7 @@ class CodexAgent {
 				type: "string",
 				default: "",
 				description:
-					"Use only when you already know the exact Codex thread ID to continue",
+					"이어갈 정확한 Codex thread ID를 이미 알고 있을 때만 사용하세요.",
 				displayOptions: {
 					show: {
 						sessionStrategy: ["specificThreadId"],
@@ -283,8 +268,12 @@ class CodexAgent {
 					workflowId: base.workflowId,
 					nodeId: base.nodeId,
 					executionId: base.executionId,
+					credentialType: base.credentialType,
+					resolvedCredentialId: base.credentialRef?.id || null,
 					credentials: base.credentials,
 					codexHome: base.codexHome,
+					profileKey: base.profileKey || null,
+					authFingerprintAtRun: base.authFingerprint || null,
 					env: base.env,
 					workingDirectory: base.workingDirectory,
 					prompt,
@@ -313,12 +302,17 @@ class CodexAgent {
 				);
 
 				returnData.push({
-					json: {
-						resource: "agent",
-						operation: "exec",
-						codexHome: base.codexHome || null,
-						workingDirectory: base.workingDirectory,
-						ignoredToolCount,
+						json: {
+							resource: "agent",
+							operation: "exec",
+							credentialType: base.credentialType,
+							credentialId: base.credentialRef?.id || null,
+							credentialName: base.credentialRef?.name || null,
+							profileKey: base.profileKey || null,
+							authFingerprint: base.authFingerprint || null,
+							codexHome: base.codexHome || null,
+							workingDirectory: base.workingDirectory,
+							ignoredToolCount,
 						streamingRequested: Boolean(options.streaming),
 						liveStreamingActive: uiState.liveStreamingEnabled,
 						chatResponseMode: uiState.chatResponseMode,
@@ -354,7 +348,7 @@ function buildCommonFields() {
 			type: "options",
 			default: "workspace-write",
 			description:
-				"Controls whether Codex can only read files, write inside the workspace, or access the system more broadly",
+				"Codex가 파일을 읽기만 할지, 워크스페이스 안에서 쓰기까지 할지, 더 넓은 시스템 접근을 허용할지 정합니다.",
 			options: [
 				{ name: "Read Only", value: "read-only" },
 				{ name: "Workspace Write", value: "workspace-write" },
@@ -367,7 +361,7 @@ function buildCommonFields() {
 			type: "options",
 			default: "on-request",
 			description:
-				"Controls when Codex should pause and ask for approval before sensitive actions",
+				"민감한 작업 전에 언제 멈추고 사용자 승인을 요청할지 정합니다.",
 			options: [
 				{ name: "Never", value: "never" },
 				{ name: "On Request", value: "on-request" },
@@ -381,7 +375,7 @@ function buildCommonFields() {
 			type: "options",
 			default: "live",
 			description:
-				"Controls whether Codex may use web search during the run",
+				"실행 중 웹 검색을 사용할 수 있는지 정합니다.",
 			options: [
 				{ name: "Live", value: "live" },
 				{ name: "Cached", value: "cached" },
@@ -394,7 +388,7 @@ function buildCommonFields() {
 			type: "options",
 			default: "medium",
 			description:
-				"Higher effort can improve harder tasks at the cost of more time and tokens",
+				"값이 높을수록 어려운 작업의 품질은 좋아질 수 있지만 시간과 토큰을 더 사용합니다.",
 			options: [
 				{ name: "Minimal", value: "minimal" },
 				{ name: "Low", value: "low" },
@@ -409,7 +403,7 @@ function buildCommonFields() {
 			type: "options",
 			default: "medium",
 			description:
-				"Controls how terse or detailed the Codex response should be",
+				"Codex 응답을 얼마나 짧게 또는 자세하게 만들지 정합니다.",
 			options: [
 				{ name: "Low", value: "low" },
 				{ name: "Medium", value: "medium" },
@@ -422,7 +416,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Let Codex act more autonomously within the chosen sandbox and approval policy",
+				"선택한 sandbox와 approval policy 안에서 Codex가 더 자율적으로 행동하게 합니다.",
 		},
 		{
 			displayName: "Include Events In Output",
@@ -430,7 +424,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				'Add raw SDK thread events to this node\'s Output JSON for debugging. This does not populate n8n\'s Logs panel; it only changes the returned output.',
+				'디버깅용으로 SDK thread 이벤트 원문을 이 노드의 Output JSON에 포함합니다. n8n의 Logs 패널을 채우는 것은 아니고, 반환 결과에만 추가됩니다.',
 		},
 		{
 			displayName: "Event Payload Detail",
@@ -438,7 +432,7 @@ function buildCommonFields() {
 			type: "options",
 			default: "summary",
 			description:
-				'Controls whether the "events" output contains lightweight previews or the full raw event payloads',
+				'"events" 출력에 요약만 넣을지, 원본 payload 전체를 넣을지 정합니다.',
 			options: [
 				{ name: "Summary", value: "summary" },
 				{ name: "Full Raw Payload", value: "full" },
@@ -455,7 +449,7 @@ function buildCommonFields() {
 			type: "number",
 			default: 400,
 			description:
-				"When Event Payload Detail is Summary, long event text and MCP payloads are truncated to this length",
+				'Event Payload Detail이 Summary일 때 긴 이벤트 텍스트와 MCP payload를 이 길이까지 잘라서 반환합니다.',
 			displayOptions: {
 				show: {
 					includeEvents: [true],
@@ -469,7 +463,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Use the SDK streaming path. When the current n8n execution UI supports live chunks, assistant text is streamed while the run is in progress; otherwise the stream is still collected internally and returned at the end.",
+				"SDK 스트리밍 경로를 사용합니다. 현재 n8n 실행 UI가 실시간 청크 표시를 지원하면 응답이 진행 중에 바로 보이고, 그렇지 않으면 내부적으로만 스트리밍한 뒤 마지막에 한 번에 반환합니다.",
 		},
 		{
 			displayName: "Ephemeral",
@@ -477,7 +471,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Use an isolated throwaway execution instead of reusing more persistent local state where supported",
+				"가능한 경우, 지속 상태를 재사용하는 대신 일회성 격리 실행을 사용합니다.",
 		},
 		{
 			displayName: "Skip Git Repo Check",
@@ -485,7 +479,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Leave off for normal use. Non-Git working directories are auto-detected and skipped automatically; enable only to force the bypass",
+				"보통은 끄고 사용하세요. Git 저장소가 아닌 작업 디렉터리는 자동으로 감지해 건너뜁니다. 강제로 검사 우회를 시키고 싶을 때만 켜세요.",
 		},
 		{
 			displayName: "Enable Network Access",
@@ -493,7 +487,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Allow Codex to access the network when the runtime and sandbox support it",
+				"런타임과 sandbox가 허용하는 범위에서 Codex의 네트워크 접근을 허용합니다.",
 		},
 		{
 			displayName: "Additional Directories",
@@ -502,7 +496,7 @@ function buildCommonFields() {
 			typeOptions: { rows: 3 },
 			default: "",
 			description:
-				"Comma or newline separated paths that Codex may also read from or use",
+				"Codex가 추가로 읽거나 사용할 수 있는 경로 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
 		},
 		{
 			displayName: "Auto Compact Token Limit",
@@ -510,7 +504,7 @@ function buildCommonFields() {
 			type: "number",
 			default: 0,
 			description:
-				"Optional token threshold for compaction. Leave 0 to keep the Codex default behavior",
+				"자동 compact를 시작할 토큰 기준값입니다. 0이면 Codex 기본 동작을 유지합니다.",
 		},
 		{
 			displayName: "Parse Final Response As JSON",
@@ -518,7 +512,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: false,
 			description:
-				"Try to parse the final response as JSON and return it in parsedFinalResponse",
+				"최종 응답을 JSON으로 파싱해 parsedFinalResponse에 함께 반환합니다.",
 		},
 		{
 			displayName: "Output Schema JSON",
@@ -527,7 +521,7 @@ function buildCommonFields() {
 			typeOptions: { rows: 6 },
 			default: "",
 			description:
-				"Optional JSON Schema used to request a structured final response from Codex",
+				"Codex에게 구조화된 최종 응답을 요청할 때 사용하는 선택형 JSON Schema입니다.",
 		},
 		{
 			displayName: "Use Workspace Skills",
@@ -535,7 +529,7 @@ function buildCommonFields() {
 			type: "boolean",
 			default: true,
 			description:
-				"If a .codex/skills folder exists in the working directory, expose it to Codex automatically",
+				"작업 디렉터리에 `.codex/skills` 폴더가 있으면 자동으로 Codex에 노출합니다.",
 		},
 		{
 			displayName: "Additional Skill Paths",
@@ -544,7 +538,7 @@ function buildCommonFields() {
 			typeOptions: { rows: 3 },
 			default: "",
 			description:
-				"Comma or newline separated skill directories to expose in addition to workspace skills",
+				"워크스페이스 skill 외에 추가로 노출할 skill 디렉터리 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
 		},
 		{
 			displayName: "Advanced Config JSON",
@@ -553,7 +547,7 @@ function buildCommonFields() {
 			typeOptions: { rows: 6 },
 			default: "",
 			description:
-				"Advanced escape hatch for raw Codex config overrides when the first-class fields are not enough",
+				"기본 필드만으로 부족할 때 raw Codex config를 직접 덮어쓸 수 있는 고급 설정입니다.",
 		},
 		{
 			displayName: "Extra Environment JSON",
@@ -562,7 +556,7 @@ function buildCommonFields() {
 			typeOptions: { rows: 4 },
 			default: "",
 			description:
-				'Optional JSON object of environment variables to inject into the Codex process, for example {"HTTPS_PROXY":"http://proxy:8080"}',
+				'Codex 프로세스에 추가로 주입할 환경 변수 JSON입니다. 예: {"HTTPS_PROXY":"http://proxy:8080"}',
 		},
 	];
 }

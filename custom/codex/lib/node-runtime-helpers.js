@@ -7,10 +7,13 @@ const {
 	ensureDirectory,
 	parseOptionalJsonObject,
 	parseStringList,
-	resolveCodexHome,
 	resolvePathMaybeRelative,
-	syncSavedAuthToCodexHome,
 } = require("./codex-utils");
+const {
+	ensureProfileStructure,
+	readProfileState,
+	sanitizeProfileKey,
+} = require("./codex-profile-utils");
 
 function coalesce(...values) {
 	for (const value of values) {
@@ -42,12 +45,8 @@ function parseDelimitedPaths(rawValue) {
 }
 
 function toConnectionArray(value) {
-	if (Array.isArray(value)) {
-		return value;
-	}
-	if (value === undefined || value === null) {
-		return [];
-	}
+	if (Array.isArray(value)) return value;
+	if (value === undefined || value === null) return [];
 	return [value];
 }
 
@@ -65,9 +64,7 @@ function resolvePromptValue(rawPrompt, inputJson) {
 		inputJson?.input,
 	].find((value) => typeof value === "string" && value.trim());
 
-	if (candidate) {
-		return candidate.trim();
-	}
+	if (candidate) return candidate.trim();
 
 	if (inputJson && Object.keys(inputJson).length > 0) {
 		return JSON.stringify(inputJson, null, 2);
@@ -77,30 +74,30 @@ function resolvePromptValue(rawPrompt, inputJson) {
 }
 
 async function getBaseNodeContext(context, itemIndex) {
-	const rawCredentials = await context.getCredentials("codexApi", itemIndex);
-	const credentials = {
-		...rawCredentials,
-		codexExecutable:
-			rawCredentials.codexExecutable ||
-			process.env.CODEX_BINARY_PATH ||
-			process.env.CODEX_EXECUTABLE_PATH ||
-			"",
-	};
+	const resolvedCredential = await resolveCodexCredential(context, itemIndex);
+	const credentials = resolvedCredential.credentials;
 	const workspaceRoot = process.cwd();
-	const stateScope = context.getNodeParameter("stateScope", itemIndex, "workspaceScoped");
-	const customCodexHome = context.getNodeParameter(
-		"customCodexHome",
-		itemIndex,
-		"",
-	);
-	const codexHome = resolveCodexHome({
-		scope: stateScope,
-		customPath: customCodexHome,
+
+	if (!credentials.profileKey) {
+		throw new Error(
+			"Codex ChatGPT Account가 아직 연결되지 않았습니다. Credential에서 Connect를 먼저 완료하세요.",
+		);
+	}
+
+	const profile = await ensureProfileStructure(credentials.profileKey, workspaceRoot);
+	const codexHome = profile.codexHome;
+	const profileState = await readProfileState({
+		profileKey: credentials.profileKey,
 		workspaceRoot,
+		codexExecutable: credentials.codexExecutable,
 	});
-	await ensureDirectory(codexHome);
-	if (stateScope === "workspaceScoped" && credentials.authMode === "saved") {
-		await syncSavedAuthToCodexHome(codexHome);
+
+	if (profileState.status !== "connected") {
+		throw new Error(
+			`Codex ChatGPT Account 상태가 ${String(
+				profileState.status || "disconnected",
+			).replace(/_/g, " ")} 입니다. 워크플로 실행 전에 Credential에서 다시 연결하세요.`,
+		);
 	}
 
 	const extraEnv = parseJsonObjectOrEmpty(
@@ -110,11 +107,8 @@ async function getBaseNodeContext(context, itemIndex) {
 	const env = {
 		...process.env,
 		...stringifyObjectValues(extraEnv),
+		CODEX_HOME: codexHome,
 	};
-	if (codexHome) env.CODEX_HOME = codexHome;
-	if (credentials.caCertificatePath) {
-		env.CODEX_CA_CERTIFICATE = credentials.caCertificatePath;
-	}
 
 	let workingDirectoryInput = "";
 	try {
@@ -124,6 +118,7 @@ async function getBaseNodeContext(context, itemIndex) {
 			"",
 		);
 	} catch {}
+
 	const workingDirectory = workingDirectoryInput
 		? resolvePathMaybeRelative(workspaceRoot, workingDirectoryInput)
 		: workspaceRoot;
@@ -131,8 +126,14 @@ async function getBaseNodeContext(context, itemIndex) {
 
 	return {
 		credentials,
+		credentialType: resolvedCredential.credentialType,
+		credentialRef: resolvedCredential.credentialRef,
 		workspaceRoot,
 		codexHome,
+		profileKey: credentials.profileKey || null,
+		authFingerprint:
+			profileState?.authFingerprint || credentials.authFingerprint || null,
+		profileState,
 		env,
 		workingDirectory,
 		workflowId: context.getWorkflow().id || null,
@@ -141,11 +142,60 @@ async function getBaseNodeContext(context, itemIndex) {
 	};
 }
 
-function readCommonOptions(context, itemIndex) {
-	const legacyOptions = parseJsonObjectOrEmpty(
-		context.getNodeParameter("optionsJson", itemIndex, ""),
-		"Legacy Options JSON",
+async function resolveCodexCredential(context, itemIndex) {
+	const credentialRef = getConfiguredCredentialReference(
+		context,
+		"codexChatgptAccount",
 	);
+
+	if (!credentialRef) {
+		throw new Error(
+			"이 노드에서 사용할 Codex ChatGPT Account credential을 먼저 선택하세요.",
+		);
+	}
+
+	let rawCredentials;
+	try {
+		rawCredentials = await context.getCredentials(
+			"codexChatgptAccount",
+			itemIndex,
+		);
+	} catch (error) {
+		const message = String(error?.message || "");
+		if (/does not exist/i.test(message)) {
+			throw new Error(
+				"선택되어 있던 Codex ChatGPT Account credential을 찾을 수 없습니다. 이 노드에서 Credential을 다시 선택하세요.",
+			);
+		}
+		throw error;
+	}
+
+	const oauthTokenData =
+		rawCredentials && typeof rawCredentials.oauthTokenData === "object"
+			? rawCredentials.oauthTokenData
+			: {};
+
+	return {
+		credentialType: "codexChatgptAccount",
+		credentialRef,
+		credentials: {
+			...rawCredentials,
+			profileKey: sanitizeProfileKey(oauthTokenData.profile_key || ""),
+			authFingerprint: String(oauthTokenData.auth_fingerprint || "").trim(),
+			codexExecutable:
+				rawCredentials.codexExecutable ||
+				process.env.CODEX_BINARY_PATH ||
+				process.env.CODEX_EXECUTABLE_PATH ||
+				"",
+		},
+	};
+}
+
+function getConfiguredCredentialReference(context, credentialType) {
+	return context.getNode()?.credentials?.[credentialType] || null;
+}
+
+function readCommonOptions(context, itemIndex) {
 	const advancedConfig = parseJsonObjectOrEmpty(
 		context.getNodeParameter("advancedConfigJson", itemIndex, ""),
 		"Advanced Config JSON",
@@ -156,92 +206,55 @@ function readCommonOptions(context, itemIndex) {
 	);
 
 	return {
-		sandbox: coalesce(
-			context.getNodeParameter("sandbox", itemIndex, ""),
-			legacyOptions.sandbox,
-		),
+		sandbox: coalesce(context.getNodeParameter("sandbox", itemIndex, "")),
 		approvalPolicy: coalesce(
 			context.getNodeParameter("approvalPolicy", itemIndex, ""),
-			legacyOptions.approvalPolicy,
 		),
-		webSearch: coalesce(
-			context.getNodeParameter("webSearch", itemIndex, ""),
-			legacyOptions.webSearch,
-		),
+		webSearch: coalesce(context.getNodeParameter("webSearch", itemIndex, "")),
 		reasoningEffort: coalesce(
 			context.getNodeParameter("reasoningEffort", itemIndex, ""),
-			legacyOptions.reasoningEffort,
 		),
-		verbosity: coalesce(
-			context.getNodeParameter("verbosity", itemIndex, ""),
-			legacyOptions.verbosity,
-		),
+		verbosity: coalesce(context.getNodeParameter("verbosity", itemIndex, "")),
 		fullAuto: coerceBoolean(
 			context.getNodeParameter("fullAuto", itemIndex, false),
-			legacyOptions.fullAuto,
 		),
 		includeEvents: coerceBoolean(
 			context.getNodeParameter("includeEvents", itemIndex, false),
-			legacyOptions.includeEvents,
 		),
 		eventPayloadDetail: coalesce(
 			context.getNodeParameter("eventPayloadDetail", itemIndex, "summary"),
-			legacyOptions.eventPayloadDetail,
 			"summary",
 		),
 		eventContentMaxLength:
 			Number(
 				context.getNodeParameter("eventContentMaxLength", itemIndex, 400),
-			) ||
-			legacyOptions.eventContentMaxLength ||
-			400,
+			) || 400,
 		ephemeral: coerceBoolean(
 			context.getNodeParameter("ephemeral", itemIndex, false),
-			legacyOptions.ephemeral,
 		),
 		skipGitRepoCheck: coerceBoolean(
 			context.getNodeParameter("skipGitRepoCheck", itemIndex, false),
-			legacyOptions.skipGitRepoCheck,
 		),
-		additionalDirectories:
-			parseDelimitedPaths(
-				context.getNodeParameter("additionalDirectories", itemIndex, ""),
-			).length > 0
-				? parseDelimitedPaths(
-						context.getNodeParameter("additionalDirectories", itemIndex, ""),
-				  )
-				: legacyOptions.additionalDirectories || [],
+		additionalDirectories: parseDelimitedPaths(
+			context.getNodeParameter("additionalDirectories", itemIndex, ""),
+		),
 		autoCompactTokenLimit:
 			Number(context.getNodeParameter("autoCompactTokenLimit", itemIndex, 0)) ||
-			legacyOptions.autoCompactTokenLimit ||
 			0,
 		parseFinalResponseAsJson: coerceBoolean(
 			context.getNodeParameter("parseFinalResponseAsJson", itemIndex, false),
-			legacyOptions.parseFinalResponseAsJson,
 		),
-		outputSchema:
-			Object.keys(outputSchema).length > 0
-				? outputSchema
-				: legacyOptions.outputSchema || {},
+		outputSchema,
 		useWorkspaceSkills: coerceBoolean(
 			context.getNodeParameter("useWorkspaceSkills", itemIndex, true),
-			legacyOptions.useWorkspaceSkills ?? true,
+			true,
 		),
-		additionalSkillPaths:
-			parseDelimitedPaths(
-				context.getNodeParameter("additionalSkillPaths", itemIndex, ""),
-			).length > 0
-				? parseDelimitedPaths(
-						context.getNodeParameter("additionalSkillPaths", itemIndex, ""),
-				  )
-				: legacyOptions.additionalSkillPaths || [],
-		advancedConfig: {
-			...(legacyOptions.config || {}),
-			...advancedConfig,
-		},
+		additionalSkillPaths: parseDelimitedPaths(
+			context.getNodeParameter("additionalSkillPaths", itemIndex, ""),
+		),
+		advancedConfig,
 		streaming: coerceBoolean(
 			context.getNodeParameter("streaming", itemIndex, false),
-			legacyOptions.streaming,
 		),
 		networkAccessEnabled:
 			context.getNodeParameter("networkAccessEnabled", itemIndex, undefined),
@@ -357,11 +370,14 @@ function assertSavedMcpServerConfig(toolsets, codexHome) {
 		for (const server of toolset.servers || []) {
 			if (server.serverSource !== "saved") continue;
 
-			const misusedToolPath = [...(server.includeTools || []), ...(server.excludeTools || [])]
-				.find((entry) =>
+			const misusedToolPath = [
+				...(server.includeTools || []),
+				...(server.excludeTools || []),
+			].find(
+				(entry) =>
 					typeof entry === "string" &&
 					(/[\\/]/.test(entry) || /\.[a-z0-9]+$/i.test(entry)),
-				);
+			);
 			if (misusedToolPath) {
 				throw new Error(
 					`Saved CODEX_HOME Server "${server.serverName}" expects MCP tool names in Include/Exclude Tools, not a file path like "${misusedToolPath}". If you want to launch D:/.../dist/index.js directly, use Inline stdio Server instead.`,
