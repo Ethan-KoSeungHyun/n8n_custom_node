@@ -29,7 +29,7 @@ N8N_CUSTOM_EXTENSIONS=/absolute/path/to/this/repo/custom
 Then install the shared custom-node dependencies once on that host:
 
 ```bash
-cd /absolute/path/to/n8n_server_github
+cd /absolute/path/to/n8n_custom_node
 npm install
 ```
 

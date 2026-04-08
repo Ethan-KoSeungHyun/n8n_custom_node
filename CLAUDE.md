@@ -11,12 +11,12 @@
 
 | 환경 | 런타임 위치 | n8n 접근 URL |
 |---|---|---|
-| macOS (서버) | `~/Documents/N8N_SERVER` | `https://n8n.seunghyun.space` |
+| macOS (서버) | `~/Documents/Project/N8N_SERVER` | `https://n8n.seunghyun.space` |
 | Windows (클라이언트) | `D:\Project\N8N_SERVER` (예시) | 로컬 또는 동일 URL |
 
-**심링크 구조 (macOS):**
+**공유 레포 위치 (macOS):**
 ```
-N8N_SERVER/n8n_server_github → ~/Documents/Git_Project/n8n_server  (이 레포)
+~/Documents/Project/N8N_SERVER/n8n_custom_node/  (이 레포, 직접 clone)
 ```
 
 **Cloudflare Tunnel (macOS 기준):**
