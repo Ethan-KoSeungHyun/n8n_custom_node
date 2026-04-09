@@ -8,7 +8,8 @@
 local/
 logs/
 tmp/
-/scripts/
+/scripts/*
+!/scripts/verify-codex-nodes.mjs
 /workflow/
 
 # Workspace-local Codex state

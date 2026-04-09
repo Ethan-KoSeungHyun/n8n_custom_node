@@ -42,7 +42,20 @@ n8n Credentials에서 **Codex ChatGPT Account** credential을 생성하고 Conne
 
 ## 5. Verification
 
-Run these from the Windows n8n runtime folder:
+### 정적 검증 (n8n 불필요)
+
+공유 레포에서 실행:
+
+```powershell
+cd D:\Project\N8N_SERVER\n8n_custom_node
+npm run verify
+```
+
+44개 항목이 모두 통과해야 한다 (구문 검사, 모듈 정합성, 유닛 테스트, 예제 JSON, 플랫폼 호환성).
+
+### 동적 검증 (n8n 실행 후)
+
+n8n 런타임 폴더에서:
 
 ```powershell
 cd D:\Project\N8N_SERVER
@@ -50,13 +63,15 @@ npm run check:codex-node
 npm run export:codex-nodes
 ```
 
-The export should include:
+export 결과에 다음 5종이 모두 포함되어야 한다:
 
 - `CUSTOM.codexAgent`
 - `CUSTOM.codexAgentTool`
 - `CUSTOM.codexAgentRegistry`
 - `CUSTOM.codexMemory`
 - `CUSTOM.codexMcpToolset`
+
+n8n에서 예제 워크플로를 import하고 credential을 교체한 뒤 Codex Agent를 1회 실행하여 `finalResponse`가 반환되는지 확인한다.
 
 ## 6. Windows-specific notes
 

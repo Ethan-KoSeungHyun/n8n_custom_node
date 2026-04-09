@@ -40,8 +40,8 @@
             ],
             "credentials": {
                 "codexChatgptAccount": {
-                    "id": "RpJYd1nM7HAWJyua",
-                    "name": "Codex ChatGPT Account account"
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Your Codex Account"
                 }
             }
         },
@@ -183,8 +183,8 @@
                 ],
                 "credentials": {
                     "codexChatgptAccount": {
-                        "id": "RpJYd1nM7HAWJyua",
-                        "name": "Codex ChatGPT Account account"
+                        "id": "YOUR_CREDENTIAL_ID",
+                        "name": "Your Codex Account"
                     }
                 }
             },

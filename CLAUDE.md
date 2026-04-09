@@ -5,23 +5,36 @@
 
 ---
 
-## 운영 환경 구성 (중요)
+## 공유 경계 (가장 중요한 원칙)
 
-이 레포는 **공유 소스**이며, 각 호스트는 별도의 런타임 폴더를 가집니다.
+> **이 레포(`n8n_custom_node`)만 git으로 공유한다. 그 외 모든 것은 호스트별로 독립이다.**
 
-| 환경 | 런타임 위치 | n8n 접근 URL |
-|---|---|---|
-| macOS (서버) | `~/Documents/Project/N8N_SERVER` | `https://n8n.seunghyun.space` |
-| Windows (클라이언트) | `D:\Project\N8N_SERVER` (예시) | 로컬 또는 동일 URL |
+### 공유하는 것 (이 git 레포)
+- 커스텀 노드 소스 코드 (`custom/codex/`)
+- 공유 npm 의존성 (`node_modules/`, `package.json`)
+- 문서 (`docs/`, `CLAUDE.md`)
+- 검증 스크립트 (`scripts/`)
+- 예제 워크플로 JSON (`docs/examples/` — credential은 반드시 placeholder)
 
-**공유 레포 위치 (macOS):**
-```
-~/Documents/Project/N8N_SERVER/n8n_custom_node/  (이 레포, 직접 clone)
-```
+### 공유하지 않는 것 (호스트 로컬)
+- **n8n 데이터베이스** (`data/.n8n/database.sqlite`) — 워크플로, credential, 실행 이력, Codex 테이블 전부 호스트별 독립
+- **`.env`** — API 키, 토큰, 경로, 포트 등 환경별 설정
+- **`data/codex-profiles/`** — Codex 인증 상태 (계정별 격리)
+- **n8n 서버 코드** — 각 호스트가 독립 설치, 최신화 유지
+- **n8n 런타임 폴더** 전체 (`N8N_SERVER/` 루트)
 
-**Cloudflare Tunnel (macOS 기준):**
-- `n8n.seunghyun.space` → `localhost:5678` (n8n)
-- `codex-bridge.seunghyun.space` → `localhost:3481` (인증 브릿지)
+### 호스트 환경
+
+| 환경 | 런타임 위치 | n8n 접근 | 도메인 |
+|---|---|---|---|
+| macOS | `~/Documents/Project/N8N_SERVER` | `https://n8n.seunghyun.space` | Cloudflare Tunnel |
+| Windows | `D:\Project\N8N_SERVER` | `http://localhost:5678` | 로컬 전용 |
+
+- macOS: Cloudflare Tunnel (`n8n.seunghyun.space` → `localhost:5678`, `codex-bridge.seunghyun.space` → `localhost:3481`)
+- Windows: 도메인 없음, 로컬에서만 접근. 인증 브릿지도 `localhost:3481`
+
+### 예제 워크플로 사용법
+`docs/examples/` JSON을 n8n에 import한 후 **반드시 credential을 자기 호스트의 것으로 교체**해야 한다. `YOUR_CREDENTIAL_ID`는 placeholder이다.
 
 ---
 
@@ -156,9 +169,11 @@ SDK는 블랙박스이므로 n8n 빌트인 AI Agent처럼 Logs 트리에 엔트�
 | 항목 | macOS | Windows |
 |---|---|---|
 | Codex CLI 경로 | `/opt/homebrew/bin/codex` | `C:\...\codex.cmd` (credential에 직접 설정) |
-| 브릿지 접근 | `localhost:3481` 또는 Cloudflare URL | `localhost:3481` (로컬 실행 시) |
-| Cloudflare tunnel | `~/.cloudflared/config.yml`에 두 개 route | 불필요 (로컬 접근) |
+| 브릿지 접근 | `localhost:3481` 또는 Cloudflare URL | `localhost:3481` (로컬 전용) |
+| Cloudflare tunnel | `~/.cloudflared/config.yml`에 두 개 route | 없음 (도메인 없이 로컬 운영) |
+| credential bridgeEnvironment | `remote` (외부 브라우저 사용 시) | `local` |
 | NODE_PATH | 공유 레포 `node_modules` 자동 주입 | 동일 (HOST_SETUP_WINDOWS.md 참조) |
+| DB 위치 | `~/…/N8N_SERVER/data/.n8n/database.sqlite` | `D:\…\N8N_SERVER\data\.n8n\database.sqlite` |
 
 ---
 
@@ -189,6 +204,46 @@ SDK는 블랙박스이므로 n8n 빌트인 AI Agent처럼 Logs 트리에 엔트�
 목표: `EngineRequest/Response 패턴` → n8n 엔진이 매 단계 추적 → Logs 트리 완전 지원
 
 구체적 전환 계획은 `docs/ARCHITECTURE.md`의 Phase 4 섹션에 기록한다.
+
+---
+
+## 검증 방법론
+
+### 정적 검증 (n8n 불필요, 크로스 플랫폼)
+```bash
+cd n8n_custom_node
+npm run verify          # = node scripts/verify-codex-nodes.mjs
+```
+19개 파일 구문 검사, 모듈 require 정합성, store-utils 유닛 테스트, buildModelFields 유닛 테스트, 예제 JSON 유효성, credential placeholder 확인, 플랫폼 경로 검사를 한 번에 실행한다. macOS와 Windows에서 동일하게 동작한다.
+
+### 동적 검증 (n8n 실행 필요, 호스트별)
+1. n8n 재시작 (코드 변경 반영)
+2. 커스텀 노드 5종 로딩 확인 (n8n API: `GET /api/v1/workflows`)
+3. Webhook 또는 Chat Trigger 기반 Codex Agent 실행
+4. DB 기록 확인 (codex_runs, codex_run_events 등)
+
+동적 검증 워크플로는 각 호스트 DB에 직접 생성해야 한다. 예제 워크플로 import 후 credential 교체로 수행.
+
+### 코드 변경 후 필수 체크리스트
+- [ ] `npm run verify` 통과
+- [ ] n8n 재시작 후 노드 로딩 정상
+- [ ] 최소 1회 Codex Agent 실행 성공 (DB 기록 확인)
+- [ ] 변경 사항이 다른 호스트에 영향 없는지 확인 (공유 경계 준수)
+
+---
+
+## 크로스 호스트 소통 (macOS ↔ Windows Claude Agent)
+
+두 호스트의 Claude Agent는 이 git 레포를 통해 간접 소통한다.
+
+### 소통 방법
+1. **이 파일 (CLAUDE.md)**: 양쪽 모두 자동으로 읽는다. 아키텍처 결정, 환경 차이, 알려진 이슈를 여기에 기록하면 상대 호스트의 Agent도 인지한다.
+2. **`docs/CROSS_HOST_NOTES.md`**: 특정 호스트에서 발견한 이슈, 질문, 요청을 기록하는 전용 파일. 상대 호스트 Agent가 pull 후 확인하고 응답을 추가한다.
+3. **커밋 메시지**: 변경 의도와 영향 범위를 명확히 기록하면 상대 Agent가 `git log`로 파악 가능.
+
+### 상대 호스트에 전달할 때
+- `docs/CROSS_HOST_NOTES.md`에 날짜 + 호스트명 + 내용을 추가
+- 사용자가 중간에서 전달해줄 수도 있음
 
 ---
 
