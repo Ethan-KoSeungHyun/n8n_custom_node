@@ -108,3 +108,68 @@ n8n 재시작 후 Codex Agent 1회 실행하면 자동 생성됩니다.
 ```
 
 ---
+
+## 2026-04-10 Windows → macOS
+
+### 정적 검증 결과
+
+#### 1. `codex-store-utils.js` 모듈 해석: **OK**
+```powershell
+node -e "require('./custom/codex/store/codex-store-utils')"
+# 에러 없이 종료
+```
+
+#### 2. `npm run verify`: **44/44 통과**
+Windows Node.js v24.14.0 환경에서 전 항목 통과. 경로 문제 없음.
+
+#### 3. `npm run verify` 전체 출력 (요약)
+- Syntax Check: 19/19
+- Module Require Check: 5/5
+- codex-store-utils Unit Tests: 8/8
+- buildModelFields Unit Tests: 3/3
+- Example Workflow Validation: 6/6
+- Cross-Platform Compatibility: 3/3
+
+### 질문 응답
+
+#### Codex CLI 경로
+- `C:\Users\seunghyun.ko\AppData\Roaming\npm\codex.cmd` — PATH에 있음
+- credential에 직접 경로 설정 없이 PATH 의존 방식으로 사용 예정
+- `.cmd` 래퍼이므로 credential에 넣는 것보다 **PATH에 두고 비워두는 방식이 더 안정적**일 것으로 판단
+
+#### `.env`에 `GITHUB_TOKEN`
+- 설정되어 있음. git push 가능.
+
+#### Node.js 버전
+- v24.14.0 (>= 20.x 조건 충족, `engines` 필드의 `<25` 조건도 충족)
+
+#### `npm install` 최종 시점
+- `@openai/codex-sdk` 0.117.0 설치 확인됨 (`n8n_custom_node/node_modules`)
+- 호스트 `N8N_SERVER/node_modules`에도 n8n, sqlite3 등 설치됨
+
+#### n8n 시작 방식
+- `npm start` (= `node scripts/run-n8n.js start`)
+- PM2, 서비스 등 별도 설정 없음. 수동 실행 방식.
+- **현재 n8n 미실행 상태**
+
+#### 기존 `codex_runs` 기록
+- DB 파일 자체가 없음 (`data/.n8n/database.sqlite` 미존재)
+- **Windows에서 아직 한 번도 n8n을 실행한 적 없는 초기 상태**
+
+### 동적 검증 (n8n 실행 필요) — 미완료
+
+아래 항목은 n8n을 실행해야 확인 가능합니다. 사용자 지시 시 진행 예정:
+- [ ] n8n 시작 후 5종 노드 로딩 확인
+- [ ] Codex Agent 1회 실행 → `finalResponse` 반환 확인
+- [ ] DB 7개 테이블 자동 생성 확인
+- [ ] `codex_run_artifacts`에 `kind='git_diff'` 레코드 생성 확인 (observability git spawn)
+- [ ] MCP config key 수정 (`mcpServers` → `mcp_servers`) 동작 확인 — MCP 사용 이력 없어 비교 불가
+
+### macOS Agent에게 전달 사항
+
+1. **Windows는 초기 환경 상태**: DB 없음, n8n 미실행 이력. 동적 검증은 n8n 첫 실행 시 일괄 진행 예정.
+2. **Codex CLI는 PATH 방식 추천**: `.cmd` 래퍼를 credential에 직접 넣으면 SDK가 혼동할 수 있으므로, PATH에 있는 상태에서 credential의 경로 필드는 비워두는 것이 안전.
+3. **`codex-store-utils.js` Windows 호환 확인 완료**: 상대 경로 `require("./codex-store-utils")` 문제 없음.
+4. **CLAUDE.md 내용 확인 완료**: 크로스 플랫폼 원칙, 공유 경계, 소통 방식 모두 인지. Windows 메모리에도 반영 예정.
+
+---
