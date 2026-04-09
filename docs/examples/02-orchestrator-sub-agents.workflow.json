@@ -1,0 +1,211 @@
+{
+    "updatedAt": "2026-04-09T12:56:43.840Z",
+    "createdAt": "2026-04-09T12:50:18.352Z",
+    "id": "A5r1kAFBPssGNeh1",
+    "name": "[Example] 02 - Orchestrator + Sub-Agents",
+    "description": null,
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+        {
+            "parameters": {
+                "options": {}
+            },
+            "id": "trigger-chat",
+            "name": "When chat message received",
+            "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                304,
+                400
+            ],
+            "webhookId": "91628fb9-b044-4470-950b-ce6e777384c6"
+        },
+        {
+            "parameters": {
+                "prompt": "={{ $json.chatInput || $json.prompt || '' }}",
+                "systemInstructions": "\ub2f9\uc2e0\uc740 \uc18c\ud504\ud2b8\uc6e8\uc5b4 \uac1c\ubc1c \ud300\uc758 \uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130\uc785\ub2c8\ub2e4.\n\n\ub2f9\uc2e0\uc5d0\uac8c\ub294 \ub2e4\uc74c \uc804\ubb38\uac00 tool\ub4e4\uc774 \uc788\uc2b5\ub2c8\ub2e4:\n\n1. **code_reviewer**: \ucf54\ub4dc \ud488\uc9c8 \uac80\ud1a0, \ubc84\uadf8 \ud0d0\uc9c0, \uac1c\uc120 \uc81c\uc548\n2. **test_writer**: \ud14c\uc2a4\ud2b8 \ucf54\ub4dc \uc791\uc131, \ud14c\uc2a4\ud2b8 \ucee4\ubc84\ub9ac\uc9c0 \ubd84\uc11d\n\n\uc0ac\uc6a9\uc790\uc758 \uc694\uccad\uc744 \ubd84\uc11d\ud558\uc5ec \uc801\uc808\ud55c \uc804\ubb38\uac00\uc5d0\uac8c \uc791\uc5c5\uc744 \uc704\uc784\ud558\uc138\uc694.\n- \ucf54\ub4dc \ub9ac\ubdf0 \uc694\uccad \u2192 code_reviewer \uc0ac\uc6a9\n- \ud14c\uc2a4\ud2b8 \uc791\uc131 \uc694\uccad \u2192 test_writer \uc0ac\uc6a9\n- \ubcf5\ud569 \uc694\uccad \u2192 \ud544\uc694\ud55c \ub9cc\ud07c \uc5ec\ub7ec \uc804\ubb38\uac00\ub97c \uc21c\ucc28\uc801\uc73c\ub85c \uc0ac\uc6a9\n\n\uac01 \uc804\ubb38\uac00\uc758 \uacb0\uacfc\ub97c \uc885\ud569\ud558\uc5ec \uc0ac\uc6a9\uc790\uc5d0\uac8c \ucd5c\uc885 \ub2f5\ubcc0\uc744 \uc81c\uacf5\ud558\uc138\uc694.",
+                "modelPreset": "gpt-5.4"
+            },
+            "id": "orchestrator",
+            "name": "Codex Orchestrator",
+            "type": "CUSTOM.codexAgent",
+            "typeVersion": 1,
+            "position": [
+                704,
+                400
+            ],
+            "credentials": {
+                "codexChatgptAccount": {
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Your Codex Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "name": "code_reviewer",
+                "description": "Use this tool when you need to review code quality, find bugs, suggest improvements, or analyze code architecture. Send the code or file path as the prompt.",
+                "systemInstructions": "\ub2f9\uc2e0\uc740 \uc2dc\ub2c8\uc5b4 \ucf54\ub4dc \ub9ac\ubdf0\uc5b4\uc785\ub2c8\ub2e4. \ucf54\ub4dc\uc758 \ud488\uc9c8, \uac00\ub3c5\uc131, \ubc84\uadf8 \uac00\ub2a5\uc131, \uc131\ub2a5 \uc774\uc288\ub97c \ubd84\uc11d\ud558\uace0 \uad6c\uccb4\uc801\uc778 \uac1c\uc120 \ubc29\uc548\uc744 \uc81c\uc2dc\ud558\uc138\uc694.\n\n\ub9ac\ubdf0 \ud3ec\ub9f7:\n1. \uc694\uc57d (1-2\ubb38\uc7a5)\n2. \ubc1c\uacac\ub41c \uc774\uc288 (\uc2ec\uac01\ub3c4 \uc21c)\n3. \uac1c\uc120 \uc81c\uc548\n4. \uc88b\uc740 \uc810",
+                "modelPreset": "gpt-5.4-mini"
+            },
+            "id": "tool-reviewer",
+            "name": "Code Reviewer",
+            "type": "CUSTOM.codexAgentTool",
+            "typeVersion": 1,
+            "position": [
+                704,
+                624
+            ],
+            "credentials": {
+                "codexChatgptAccount": {
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Your Codex Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "name": "test_writer",
+                "description": "Use this tool when you need to write tests, analyze test coverage, or suggest testing strategies. Send the code or requirements as the prompt.",
+                "systemInstructions": "\ub2f9\uc2e0\uc740 \ud14c\uc2a4\ud2b8 \uc804\ubb38\uac00\uc785\ub2c8\ub2e4. \uc8fc\uc5b4\uc9c4 \ucf54\ub4dc\ub098 \uc694\uad6c\uc0ac\ud56d\uc5d0 \ub300\ud574 \ud6a8\uacfc\uc801\uc778 \ud14c\uc2a4\ud2b8 \ucf54\ub4dc\ub97c \uc791\uc131\ud558\uc138\uc694.\n\n\ud3ec\ub9f7:\n1. \ud14c\uc2a4\ud2b8 \uc804\ub7b5 \uc694\uc57d\n2. \ub2e8\uc704 \ud14c\uc2a4\ud2b8 \ucf54\ub4dc\n3. \uc5e3\uc9c0 \ucf00\uc774\uc2a4\n4. \ud14c\uc2a4\ud2b8 \ucee4\ubc84\ub9ac\uc9c0 \uc124\uba85",
+                "modelPreset": "gpt-5.4-mini"
+            },
+            "id": "tool-tester",
+            "name": "Test Writer",
+            "type": "CUSTOM.codexAgentTool",
+            "typeVersion": 1,
+            "position": [
+                976,
+                624
+            ],
+            "credentials": {
+                "codexChatgptAccount": {
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Your Codex Account"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "id": "memory-orch",
+            "name": "Codex Memory",
+            "type": "CUSTOM.codexMemory",
+            "typeVersion": 1,
+            "position": [
+                592,
+                560
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## 02 - \uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130 + \uc11c\ube0c\uc5d0\uc774\uc804\ud2b8\n\n### \ud575\uc2ec \uc544\ud0a4\ud14d\ucc98\n```\n[Chat Trigger] -> [Codex Agent (Orchestrator)]\n                       |-- Tool: Code Reviewer\n                       |-- Tool: Test Writer\n```\n\n### \uc791\ub3d9 \ubc29\uc2dd\n1. \uc0ac\uc6a9\uc790\uc758 \uc694\uccad\uc774 **\uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130**\uc5d0 \ub3c4\ub2ec\ud569\ub2c8\ub2e4\n2. \uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130\uc758 System Instructions\uc5d0 \ub530\ub77c \uc801\uc808\ud55c **\uc11c\ube0c\uc5d0\uc774\uc804\ud2b8 tool**\uc744 \uc120\ud0dd\ud569\ub2c8\ub2e4\n3. \uc11c\ube0c\uc5d0\uc774\uc804\ud2b8\ub294 **Always New** \uc804\ub7b5\uc73c\ub85c \ub3c5\ub9bd \uc2e4\ud589\ub429\ub2c8\ub2e4\n4. \uacb0\uacfc\ub97c \ubc1b\uc740 \uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130\uac00 \ucd5c\uc885 \ub2f5\ubcc0\uc744 \uc0dd\uc131\ud569\ub2c8\ub2e4\n\n### \uc8fc\uc758\uc0ac\ud56d\n- \uc11c\ube0c\uc5d0\uc774\uc804\ud2b8(AgentTool)\ub294 Session Strategy\ub97c **Always New**\ub85c \uc124\uc815\ud558\uc138\uc694\n- \uc624\ucf00\uc2a4\ud2b8\ub808\uc774\ud130\ub9cc Auto Resume\uc744 \uc0ac\uc6a9\ud558\uba74 \uc138\uc158 \uad00\ub9ac\uac00 \uae54\ub054\ud569\ub2c8\ub2e4\n- \uac01 \uc11c\ube0c\uc5d0\uc774\uc804\ud2b8\uc5d0 \ubcc4\ub3c4\uc758 credential\uc744 \uc124\uc815\ud558\uba74 \ub2e4\ub978 ChatGPT \uacc4\uc815\uc73c\ub85c \uc2e4\ud589\ud560 \uc218 \uc788\uc2b5\ub2c8\ub2e4",
+                "height": 488,
+                "width": 620
+            },
+            "id": "sticky-overview",
+            "name": "Sticky Note",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -544,
+                208
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## Tool Description \uc791\uc131 \ud301\n\n\uc11c\ube0c\uc5d0\uc774\uc804\ud2b8\uc758 **Description** \ud544\ub4dc\ub294 \ubd80\ubaa8 \uc5d0\uc774\uc804\ud2b8\uac00 \uc774 tool\uc744 \uc5b8\uc81c \uc0ac\uc6a9\ud560\uc9c0 \uacb0\uc815\ud558\ub294 \ub370 \ud575\uc2ec\uc785\ub2c8\ub2e4.\n\n### \uc88b\uc740 \uc608\n\"Use this tool when you need to review code quality, find bugs, suggest improvements\"\n\n### \ub098\uc05c \uc608\n\"\ucf54\ub4dc \ub9ac\ubdf0 \ub3c4\uad6c\" (\ub108\ubb34 \uc9e7\uc544\uc11c LLM\uc774 \uc5b8\uc81c \uc0ac\uc6a9\ud560\uc9c0 \ud310\ub2e8\ud558\uae30 \uc5b4\ub824\uc6c0)\n\n### \ud575\uc2ec \uc6d0\uce59\n- **\uc601\uc5b4\ub85c \uc791\uc131** (LLM\uc774 \uc798 \uc774\ud574\ud558\ub294 \uc5b8\uc5b4)\n- **\uc5b8\uc81c \uc0ac\uc6a9\ud558\ub294\uc9c0** \uba85\uc2dc\n- **\ubb34\uc5c7\uc744 \ubcf4\ub0b4\uc57c \ud558\ub294\uc9c0** \uc124\uba85",
+                "height": 384,
+                "width": 620
+            },
+            "id": "sticky-tips",
+            "name": "Sticky Note1",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -544,
+                736
+            ]
+        }
+    ],
+    "connections": {
+        "When chat message received": {
+            "main": [
+                [
+                    {
+                        "node": "Codex Orchestrator",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Codex Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "Codex Orchestrator",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Code Reviewer": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Codex Orchestrator",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Test Writer": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Codex Orchestrator",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "callerPolicy": "workflowsFromSameOwner",
+        "availableInMCP": false,
+        "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": null,
+    "pinData": {},
+    "versionId": "02de6d53-2516-4213-8fba-361fce49aa69",
+    "activeVersionId": null,
+    "versionCounter": 10,
+    "triggerCount": 0,
+    "shared": [
+        {
+            "updatedAt": "2026-04-09T12:50:18.353Z",
+            "createdAt": "2026-04-09T12:50:18.353Z",
+            "role": "workflow:owner",
+            "workflowId": "A5r1kAFBPssGNeh1",
+            "projectId": "yMaXW7vuBFc1XI97",
+            "project": {
+                "updatedAt": "2026-03-25T11:22:27.033Z",
+                "createdAt": "2026-03-25T11:21:04.972Z",
+                "id": "yMaXW7vuBFc1XI97",
+                "name": "Seunghyun Ko <gsh0894@naver.com>",
+                "type": "personal",
+                "icon": null,
+                "description": null,
+                "creatorId": "9b7617e9-3225-4b43-bf32-be8d106bc3b6"
+            }
+        }
+    ],
+    "tags": [],
+    "activeVersion": null
+}

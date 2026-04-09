@@ -1,0 +1,272 @@
+{
+    "updatedAt": "2026-04-09T14:57:59.574Z",
+    "createdAt": "2026-04-09T12:50:18.327Z",
+    "id": "zKQZJNBApfL0VgvA",
+    "name": "[Example] 01 - Basic Chat Agent",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+        {
+            "parameters": {
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+            "typeVersion": 1.4,
+            "position": [
+                400,
+                304
+            ],
+            "id": "trigger-chat",
+            "name": "When chat message received",
+            "webhookId": "1d0c70f6-32c6-4316-9a6d-4707a8f644b4"
+        },
+        {
+            "parameters": {
+                "systemInstructions": "\ub2f9\uc2e0\uc740 \uce5c\uc808\ud55c \ud55c\uad6d\uc5b4 AI \uc5b4\uc2dc\uc2a4\ud134\ud2b8\uc785\ub2c8\ub2e4.",
+                "modelPreset": "gpt-5.2",
+                "sessionId": "",
+                "sandbox": "danger-full-access",
+                "fullAuto": true,
+                "skipGitRepoCheck": true
+            },
+            "id": "codex-agent",
+            "name": "Codex Agent",
+            "type": "CUSTOM.codexAgent",
+            "typeVersion": 1,
+            "position": [
+                704,
+                304
+            ],
+            "credentials": {
+                "codexChatgptAccount": {
+                    "id": "RpJYd1nM7HAWJyua",
+                    "name": "Codex ChatGPT Account account"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "id": "codex-memory",
+            "name": "Codex Memory",
+            "type": "CUSTOM.codexMemory",
+            "typeVersion": 1,
+            "position": [
+                704,
+                528
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## 01 - \uae30\ubcf8 \ucc44\ud305 \uc5d0\uc774\uc804\ud2b8\n\n### \uad6c\uc131\n- **Chat Trigger** -> **Codex Agent** <- **Codex Memory**\n\n### \ud575\uc2ec \ud3ec\uc778\ud2b8\n1. **Session Strategy = Auto Resume**: \uac19\uc740 sessionId\ub85c \ub3cc\uc544\uc624\uba74 \uc774\uc804 \ub300\ud654\ub97c \uc774\uc5b4\uac11\ub2c8\ub2e4\n2. **Codex Memory**: sessionId -> threadId \ub9e4\ud551\uc744 \uad00\ub9ac\ud558\uc5ec \uc138\uc158 \uc5f0\uc18d\uc131\uc744 \ubcf4\uc7a5\ud569\ub2c8\ub2e4\n3. **Mirror Transcript**: \uc0c8 thread\uac00 \uc0dd\uc131\ub420 \ub54c \ucd5c\uadfc \ub300\ud654\ub97c warm start\ub85c \uc81c\uacf5\ud569\ub2c8\ub2e4\n\n### \uc0ac\uc6a9\ubc95\n1. Codex ChatGPT Account credential\uc744 \uc124\uc815\ud558\uc138\uc694\n2. \uc6cc\ud06c\ud50c\ub85c\ub97c \ud65c\uc131\ud654\ud558\uace0 n8n \ucc44\ud305 \ud328\ub110\uc5d0\uc11c \uba54\uc2dc\uc9c0\ub97c \ubcf4\ub0b4\uc138\uc694\n3. \uac19\uc740 \uc138\uc158\uc5d0\uc11c \uc5ec\ub7ec \ubc88 \ub300\ud654\ud558\uba74 \uc774\uc804 \ub9e5\ub77d\uc744 \uae30\uc5b5\ud569\ub2c8\ub2e4",
+                "height": 396,
+                "width": 564
+            },
+            "id": "c3faa4f0-3841-413f-a58d-5431e8e4ded7",
+            "name": "Sticky Note",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -288,
+                176
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## Session Strategy \uc124\uba85\n\n| \uc804\ub7b5 | \ub3d9\uc791 |\n|------|------|\n| Auto Resume | sessionId \uae30\ubc18\uc73c\ub85c thread \uc790\ub3d9 \ubcf5\uc6d0 |\n| Always New | \ub9e4\ubc88 \uc0c8 thread \uc0dd\uc131 |\n| Specific Thread ID | \uc9c0\uc815\ub41c threadId\ub85c \uc774\uc5b4\uac00\uae30 |\n| Last Thread | SDK\uc758 \ub9c8\uc9c0\ub9c9 thread \uc7ac\uac1c |\n\nAuto Resume\uc774 \ucc44\ud305 \uc6cc\ud06c\ud50c\ub85c\uc5d0\uc11c \uac00\uc7a5 \uc790\uc5f0\uc2a4\ub7fd\uc2b5\ub2c8\ub2e4.",
+                "height": 260,
+                "width": 564
+            },
+            "id": "db7edd3e-ac25-4973-abcf-9ae9fbbbcfe7",
+            "name": "Sticky Note1",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -288,
+                608
+            ]
+        }
+    ],
+    "connections": {
+        "When chat message received": {
+            "main": [
+                [
+                    {
+                        "node": "Codex Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Codex Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "Codex Agent",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "callerPolicy": "workflowsFromSameOwner",
+        "availableInMCP": false,
+        "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": null,
+    "pinData": {},
+    "versionId": "efca9fef-efcb-45f0-be08-bf6756eb680f",
+    "activeVersionId": "efca9fef-efcb-45f0-be08-bf6756eb680f",
+    "versionCounter": 28,
+    "triggerCount": 1,
+    "shared": [
+        {
+            "updatedAt": "2026-04-09T12:50:18.328Z",
+            "createdAt": "2026-04-09T12:50:18.328Z",
+            "role": "workflow:owner",
+            "workflowId": "zKQZJNBApfL0VgvA",
+            "projectId": "yMaXW7vuBFc1XI97",
+            "project": {
+                "updatedAt": "2026-03-25T11:22:27.033Z",
+                "createdAt": "2026-03-25T11:21:04.972Z",
+                "id": "yMaXW7vuBFc1XI97",
+                "name": "Seunghyun Ko <gsh0894@naver.com>",
+                "type": "personal",
+                "icon": null,
+                "description": null,
+                "creatorId": "9b7617e9-3225-4b43-bf32-be8d106bc3b6"
+            }
+        }
+    ],
+    "tags": [],
+    "activeVersion": {
+        "updatedAt": "2026-04-09T15:06:00.000Z",
+        "createdAt": "2026-04-09T14:57:59.575Z",
+        "versionId": "efca9fef-efcb-45f0-be08-bf6756eb680f",
+        "workflowId": "zKQZJNBApfL0VgvA",
+        "nodes": [
+            {
+                "parameters": {
+                    "options": {}
+                },
+                "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+                "typeVersion": 1.4,
+                "position": [
+                    400,
+                    304
+                ],
+                "id": "trigger-chat",
+                "name": "When chat message received",
+                "webhookId": "1d0c70f6-32c6-4316-9a6d-4707a8f644b4"
+            },
+            {
+                "parameters": {
+                    "systemInstructions": "\ub2f9\uc2e0\uc740 \uce5c\uc808\ud55c \ud55c\uad6d\uc5b4 AI \uc5b4\uc2dc\uc2a4\ud134\ud2b8\uc785\ub2c8\ub2e4.",
+                    "modelPreset": "gpt-5.2",
+                    "sessionId": "",
+                    "sandbox": "danger-full-access",
+                    "fullAuto": true,
+                    "skipGitRepoCheck": true
+                },
+                "id": "codex-agent",
+                "name": "Codex Agent",
+                "type": "CUSTOM.codexAgent",
+                "typeVersion": 1,
+                "position": [
+                    704,
+                    304
+                ],
+                "credentials": {
+                    "codexChatgptAccount": {
+                        "id": "RpJYd1nM7HAWJyua",
+                        "name": "Codex ChatGPT Account account"
+                    }
+                }
+            },
+            {
+                "parameters": {},
+                "id": "codex-memory",
+                "name": "Codex Memory",
+                "type": "CUSTOM.codexMemory",
+                "typeVersion": 1,
+                "position": [
+                    704,
+                    528
+                ]
+            },
+            {
+                "parameters": {
+                    "content": "## 01 - \uae30\ubcf8 \ucc44\ud305 \uc5d0\uc774\uc804\ud2b8\n\n### \uad6c\uc131\n- **Chat Trigger** -> **Codex Agent** <- **Codex Memory**\n\n### \ud575\uc2ec \ud3ec\uc778\ud2b8\n1. **Session Strategy = Auto Resume**: \uac19\uc740 sessionId\ub85c \ub3cc\uc544\uc624\uba74 \uc774\uc804 \ub300\ud654\ub97c \uc774\uc5b4\uac11\ub2c8\ub2e4\n2. **Codex Memory**: sessionId -> threadId \ub9e4\ud551\uc744 \uad00\ub9ac\ud558\uc5ec \uc138\uc158 \uc5f0\uc18d\uc131\uc744 \ubcf4\uc7a5\ud569\ub2c8\ub2e4\n3. **Mirror Transcript**: \uc0c8 thread\uac00 \uc0dd\uc131\ub420 \ub54c \ucd5c\uadfc \ub300\ud654\ub97c warm start\ub85c \uc81c\uacf5\ud569\ub2c8\ub2e4\n\n### \uc0ac\uc6a9\ubc95\n1. Codex ChatGPT Account credential\uc744 \uc124\uc815\ud558\uc138\uc694\n2. \uc6cc\ud06c\ud50c\ub85c\ub97c \ud65c\uc131\ud654\ud558\uace0 n8n \ucc44\ud305 \ud328\ub110\uc5d0\uc11c \uba54\uc2dc\uc9c0\ub97c \ubcf4\ub0b4\uc138\uc694\n3. \uac19\uc740 \uc138\uc158\uc5d0\uc11c \uc5ec\ub7ec \ubc88 \ub300\ud654\ud558\uba74 \uc774\uc804 \ub9e5\ub77d\uc744 \uae30\uc5b5\ud569\ub2c8\ub2e4",
+                    "height": 396,
+                    "width": 564
+                },
+                "id": "c3faa4f0-3841-413f-a58d-5431e8e4ded7",
+                "name": "Sticky Note",
+                "type": "n8n-nodes-base.stickyNote",
+                "typeVersion": 1,
+                "position": [
+                    -288,
+                    176
+                ]
+            },
+            {
+                "parameters": {
+                    "content": "## Session Strategy \uc124\uba85\n\n| \uc804\ub7b5 | \ub3d9\uc791 |\n|------|------|\n| Auto Resume | sessionId \uae30\ubc18\uc73c\ub85c thread \uc790\ub3d9 \ubcf5\uc6d0 |\n| Always New | \ub9e4\ubc88 \uc0c8 thread \uc0dd\uc131 |\n| Specific Thread ID | \uc9c0\uc815\ub41c threadId\ub85c \uc774\uc5b4\uac00\uae30 |\n| Last Thread | SDK\uc758 \ub9c8\uc9c0\ub9c9 thread \uc7ac\uac1c |\n\nAuto Resume\uc774 \ucc44\ud305 \uc6cc\ud06c\ud50c\ub85c\uc5d0\uc11c \uac00\uc7a5 \uc790\uc5f0\uc2a4\ub7fd\uc2b5\ub2c8\ub2e4.",
+                    "height": 260,
+                    "width": 564
+                },
+                "id": "db7edd3e-ac25-4973-abcf-9ae9fbbbcfe7",
+                "name": "Sticky Note1",
+                "type": "n8n-nodes-base.stickyNote",
+                "typeVersion": 1,
+                "position": [
+                    -288,
+                    608
+                ]
+            }
+        ],
+        "connections": {
+            "When chat message received": {
+                "main": [
+                    [
+                        {
+                            "node": "Codex Agent",
+                            "type": "main",
+                            "index": 0
+                        }
+                    ]
+                ]
+            },
+            "Codex Memory": {
+                "ai_memory": [
+                    [
+                        {
+                            "node": "Codex Agent",
+                            "type": "ai_memory",
+                            "index": 0
+                        }
+                    ]
+                ]
+            }
+        },
+        "authors": "Seunghyun Ko",
+        "name": "Version efca9fef",
+        "description": "",
+        "autosaved": true,
+        "workflowPublishHistory": [
+            {
+                "createdAt": "2026-04-09T15:06:00.513Z",
+                "id": 60,
+                "workflowId": "zKQZJNBApfL0VgvA",
+                "versionId": "efca9fef-efcb-45f0-be08-bf6756eb680f",
+                "event": "activated",
+                "userId": "9b7617e9-3225-4b43-bf32-be8d106bc3b6"
+            }
+        ]
+    }
+}

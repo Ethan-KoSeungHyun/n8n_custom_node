@@ -432,27 +432,38 @@ async function insertRunEvents(runId, events) {
 
 	const dataSource = getDataSource();
 	const driverKind = getDriverKind(dataSource);
+	const COLS = 7;
+	const BATCH_SIZE = Math.floor(999 / COLS);
 	let count = 0;
 
-	for (const event of events) {
-		const values = [
-			createId(),
-			runId,
-			event.seq,
-			event.threadId || null,
-			event.eventType,
-			event.ts || nowIso(),
-			jsonStringify(event.payloadJson ?? event.payload ?? {}),
-		];
+	for (let i = 0; i < events.length; i += BATCH_SIZE) {
+		const batch = events.slice(i, i + BATCH_SIZE);
+		const allValues = [];
+		const rowPlaceholders = [];
+
+		for (const event of batch) {
+			allValues.push(
+				createId(),
+				runId,
+				event.seq,
+				event.threadId || null,
+				event.eventType,
+				event.ts || nowIso(),
+				jsonStringify(event.payloadJson ?? event.payload ?? {}),
+			);
+			const offset = allValues.length - COLS;
+			rowPlaceholders.push(
+				`(${Array.from({ length: COLS }, (_, k) => placeholder(driverKind, offset + k + 1)).join(", ")})`,
+			);
+		}
+
 		const sql = `
 			INSERT INTO ${TABLES.runEvents} (
 				id, run_id, seq, thread_id, event_type, ts, payload_json
-			) VALUES (
-				${values.map((_, index) => placeholder(driverKind, index + 1)).join(", ")}
-			)
+			) VALUES ${rowPlaceholders.join(", ")}
 		`;
-		await dataSource.query(sql, values);
-		count += 1;
+		await dataSource.query(sql, allValues);
+		count += batch.length;
 	}
 
 	return count;

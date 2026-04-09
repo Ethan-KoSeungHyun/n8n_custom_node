@@ -60,10 +60,9 @@ npm run export:codex-nodes
 
 Then smoke-test:
 
-- `Codex CLI > Auth > Status`
-- `Codex Agent` with `Runtime=CLI`
-- `Codex Agent` with `Runtime=SDK`
-- `Auto Resume` over two turns
+- Codex ChatGPT Account credential에서 Connect 후 인증 상태 확인
+- `Codex Agent` (Session Strategy=Always New) 실행 — `finalResponse` 반환 확인
+- `Codex Agent` (Session Strategy=Auto Resume) 두 턴 연속 — threadId 동일 확인
 - `Codex MCP Toolset` with a saved server or the local stdio smoke server
 
 ## 7. Operating model

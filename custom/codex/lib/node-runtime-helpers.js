@@ -254,7 +254,7 @@ function readCommonOptions(context, itemIndex) {
 		),
 		advancedConfig,
 		streaming: coerceBoolean(
-			context.getNodeParameter("streaming", itemIndex, false),
+			context.getNodeParameter("streaming", itemIndex, true),
 		),
 		networkAccessEnabled:
 			context.getNodeParameter("networkAccessEnabled", itemIndex, undefined),
@@ -414,8 +414,241 @@ function stringifyObjectValues(input) {
 	return result;
 }
 
+function buildSharedOptionFields(overrides = {}) {
+	const defaults = {
+		sandboxDescription:
+			"Codex가 파일을 읽기만 할지, 워크스페이스 안에서 쓰기까지 할지, 더 넓은 시스템 접근을 허용할지 정합니다.",
+		approvalDescription:
+			"민감한 작업 전에 언제 멈추고 사용자 승인을 요청할지 정합니다.",
+		webSearchDescription:
+			"실행 중 웹 검색을 사용할 수 있는지 정합니다.",
+		ephemeralDefault: false,
+		ephemeralDescription:
+			"가능한 경우, 지속 상태를 재사용하는 대신 일회성 격리 실행을 사용합니다.",
+		parseFinalResponseAsJsonDefault: false,
+		parseFinalResponseAsJsonDescription:
+			"최종 응답을 JSON으로 파싱해 parsedFinalResponse에 함께 반환합니다.",
+		includeOutputSchemaJson: false,
+		...overrides,
+	};
+
+	const fields = [
+		{
+			displayName: "Sandbox",
+			name: "sandbox",
+			type: "options",
+			default: "workspace-write",
+			description: defaults.sandboxDescription,
+			options: [
+				{ name: "Read Only", value: "read-only" },
+				{ name: "Workspace Write", value: "workspace-write" },
+				{ name: "Danger Full Access", value: "danger-full-access" },
+			],
+		},
+		{
+			displayName: "Approval Policy",
+			name: "approvalPolicy",
+			type: "options",
+			default: "on-request",
+			description: defaults.approvalDescription,
+			options: [
+				{ name: "Never", value: "never" },
+				{ name: "On Request", value: "on-request" },
+				{ name: "On Failure", value: "on-failure" },
+				{ name: "Untrusted", value: "untrusted" },
+			],
+		},
+		{
+			displayName: "Web Search",
+			name: "webSearch",
+			type: "options",
+			default: "live",
+			description: defaults.webSearchDescription,
+			options: [
+				{ name: "Live", value: "live" },
+				{ name: "Cached", value: "cached" },
+				{ name: "Disabled", value: "disabled" },
+			],
+		},
+		{
+			displayName: "Reasoning Effort",
+			name: "reasoningEffort",
+			type: "options",
+			default: "medium",
+			description:
+				"값이 높을수록 어려운 작업의 품질은 좋아질 수 있지만 시간과 토큰을 더 사용합니다.",
+			options: [
+				{ name: "Minimal", value: "minimal" },
+				{ name: "Low", value: "low" },
+				{ name: "Medium", value: "medium" },
+				{ name: "High", value: "high" },
+				{ name: "Extra High", value: "xhigh" },
+			],
+		},
+		{
+			displayName: "Verbosity",
+			name: "verbosity",
+			type: "options",
+			default: "medium",
+			description:
+				"Codex 응답을 얼마나 짧게 또는 자세하게 만들지 정합니다.",
+			options: [
+				{ name: "Low", value: "low" },
+				{ name: "Medium", value: "medium" },
+				{ name: "High", value: "high" },
+			],
+		},
+		{
+			displayName: "Full Auto",
+			name: "fullAuto",
+			type: "boolean",
+			default: false,
+			description:
+				"선택한 sandbox와 approval policy 안에서 Codex가 더 자율적으로 행동하게 합니다.",
+		},
+		{
+			displayName: "Include Events In Output",
+			name: "includeEvents",
+			type: "boolean",
+			default: false,
+			description:
+				'디버깅용으로 SDK thread 이벤트 원문을 이 노드의 Output JSON에 포함합니다. n8n의 Logs 패널을 채우는 것은 아니고, 반환 결과에만 추가됩니다.',
+		},
+		{
+			displayName: "Event Payload Detail",
+			name: "eventPayloadDetail",
+			type: "options",
+			default: "summary",
+			description:
+				'"events" 출력에 요약만 넣을지, 원본 payload 전체를 넣을지 정합니다.',
+			options: [
+				{ name: "Summary", value: "summary" },
+				{ name: "Full Raw Payload", value: "full" },
+			],
+			displayOptions: { show: { includeEvents: [true] } },
+		},
+		{
+			displayName: "Event Content Max Length",
+			name: "eventContentMaxLength",
+			type: "number",
+			default: 400,
+			description:
+				'Event Payload Detail이 Summary일 때 긴 이벤트 텍스트와 MCP payload를 이 길이까지 잘라서 반환합니다.',
+			displayOptions: { show: { includeEvents: [true], eventPayloadDetail: ["summary"] } },
+		},
+		{
+			displayName: "Streaming",
+			name: "streaming",
+			type: "boolean",
+			default: true,
+			description:
+				"SDK 스트리밍 경로를 사용합니다. 활성화하면 Logs 트리에 실행 중 도구 호출이 기록되고, n8n 실행 UI가 실시간 청크 표시를 지원하면 응답이 진행 중에 바로 보입니다. 비활성화하면 SDK가 완료 후 한 번에 결과를 반환하며 Logs 트리 항목이 생성되지 않습니다.",
+		},
+		{
+			displayName: "Ephemeral",
+			name: "ephemeral",
+			type: "boolean",
+			default: defaults.ephemeralDefault,
+			description: defaults.ephemeralDescription,
+		},
+		{
+			displayName: "Skip Git Repo Check",
+			name: "skipGitRepoCheck",
+			type: "boolean",
+			default: false,
+			description:
+				"보통은 끄고 사용하세요. Git 저장소가 아닌 작업 디렉터리는 자동으로 감지해 건너뜁니다. 강제로 검사 우회를 시키고 싶을 때만 켜세요.",
+		},
+		{
+			displayName: "Enable Network Access",
+			name: "networkAccessEnabled",
+			type: "boolean",
+			default: false,
+			description:
+				"런타임과 sandbox가 허용하는 범위에서 Codex의 네트워크 접근을 허용합니다.",
+		},
+		{
+			displayName: "Additional Directories",
+			name: "additionalDirectories",
+			type: "string",
+			typeOptions: { rows: 3 },
+			default: "",
+			description:
+				"Codex가 추가로 읽거나 사용할 수 있는 경로 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
+		},
+		{
+			displayName: "Auto Compact Token Limit",
+			name: "autoCompactTokenLimit",
+			type: "number",
+			default: 0,
+			description:
+				"자동 compact를 시작할 토큰 기준값입니다. 0이면 Codex 기본 동작을 유지합니다.",
+		},
+		{
+			displayName: "Parse Final Response As JSON",
+			name: "parseFinalResponseAsJson",
+			type: "boolean",
+			default: defaults.parseFinalResponseAsJsonDefault,
+			description: defaults.parseFinalResponseAsJsonDescription,
+		},
+	];
+
+	if (defaults.includeOutputSchemaJson) {
+		fields.push({
+			displayName: "Output Schema JSON",
+			name: "outputSchemaJson",
+			type: "string",
+			typeOptions: { rows: 6 },
+			default: "",
+			description:
+				"Codex에게 구조화된 최종 응답을 요청할 때 사용하는 선택형 JSON Schema입니다.",
+		});
+	}
+
+	fields.push(
+		{
+			displayName: "Use Workspace Skills",
+			name: "useWorkspaceSkills",
+			type: "boolean",
+			default: true,
+			description:
+				"작업 디렉터리에 `.codex/skills` 폴더가 있으면 자동으로 Codex에 노출합니다.",
+		},
+		{
+			displayName: "Additional Skill Paths",
+			name: "additionalSkillPaths",
+			type: "string",
+			typeOptions: { rows: 3 },
+			default: "",
+			description:
+				"워크스페이스 skill 외에 추가로 노출할 skill 디렉터리 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
+		},
+		{
+			displayName: "Advanced Config JSON",
+			name: "advancedConfigJson",
+			type: "string",
+			typeOptions: { rows: 6 },
+			default: "",
+			description:
+				"기본 필드만으로 부족할 때 raw Codex config를 직접 덮어쓸 수 있는 고급 설정입니다.",
+		},
+		{
+			displayName: "Extra Environment JSON",
+			name: "extraEnvJson",
+			type: "string",
+			typeOptions: { rows: 4 },
+			default: "",
+			description:
+				'Codex 프로세스에 추가로 주입할 환경 변수 JSON입니다. 예: {"HTTPS_PROXY":"http://proxy:8080"}',
+		},
+	);
+
+	return fields;
+}
+
 module.exports = {
 	buildCodexMcpConfig,
+	buildSharedOptionFields,
 	describeConfiguredMcpToolsets,
 	coerceBoolean,
 	getBaseNodeContext,

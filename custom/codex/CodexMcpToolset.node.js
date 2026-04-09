@@ -18,7 +18,7 @@ class CodexMcpToolset {
 		icon: { light: "file:codex.svg", dark: "file:codex.svg" },
 		group: ["transform"],
 		version: 1,
-		description: "Provide Codex-specific MCP server configuration to Codex Agent",
+		description: "Codex Agent에 MCP 서버 설정을 제공합니다.",
 		defaults: {
 			name: "Codex MCP Toolset",
 			color: "#404040",
@@ -42,7 +42,7 @@ class CodexMcpToolset {
 		properties: [
 			{
 				displayName:
-					"Codex MCP Toolset is a configuration provider, not the runtime executor. Actual MCP calls happen inside Codex Agent, so runtime logs and used-tool details appear on Codex Agent output.",
+					"Codex MCP Toolset은 설정 제공자이며 직접 실행하지 않습니다. 실제 MCP 호출은 Codex Agent 내부에서 수행되므로, 런타임 로그와 사용된 tool 정보는 Codex Agent 출력에서 확인하세요.",
 				name: "toolsetBehaviorNotice",
 				type: "notice",
 				default: "",
@@ -53,12 +53,16 @@ class CodexMcpToolset {
 				type: "string",
 				default: "",
 				required: true,
+				description:
+					"MCP 서버 고유 이름입니다. 영문자, 숫자, 하이픈, 밑줄만 사용할 수 있습니다.",
 			},
 			{
 				displayName: "Server Source",
 				name: "serverSource",
 				type: "options",
 				default: "saved",
+				description:
+					"MCP 서버 설정 출처를 선택합니다. Saved는 CODEX_HOME config.toml에 등록된 서버, Inline은 이 노드에서 직접 정의합니다.",
 				options: [
 					{ name: "Saved CODEX_HOME Server", value: "saved" },
 					{ name: "Inline HTTP Server", value: "http" },
@@ -70,12 +74,16 @@ class CodexMcpToolset {
 				name: "required",
 				type: "boolean",
 				default: true,
+				description:
+					"true이면 이 MCP 서버 연결이 실패할 경우 에이전트 실행도 중단됩니다.",
 			},
 			{
 				displayName: "Timeout (Seconds)",
 				name: "timeout",
 				type: "number",
 				default: 120,
+				description:
+					"MCP 서버 시작 및 tool 호출 타임아웃(초)입니다.",
 			},
 			{
 				displayName: "Include Tools",
@@ -84,7 +92,7 @@ class CodexMcpToolset {
 				typeOptions: { rows: 3 },
 				default: "",
 				description:
-					"Comma or newline separated MCP tool names to prefer, for example jira_get_issue. Do not put server file paths here",
+					"사용할 MCP tool 이름을 쉼표 또는 줄바꿈으로 구분합니다 (예: jira_get_issue). 서버 파일 경로가 아닌 tool 이름을 입력하세요.",
 			},
 			{
 				displayName: "Exclude Tools",
@@ -93,7 +101,7 @@ class CodexMcpToolset {
 				typeOptions: { rows: 3 },
 				default: "",
 				description:
-					"Comma or newline separated MCP tool names to avoid, for example jira_transition_issue",
+					"제외할 MCP tool 이름을 쉼표 또는 줄바꿈으로 구분합니다 (예: jira_transition_issue).",
 			},
 			{
 				displayName: "Server URL",
@@ -101,6 +109,8 @@ class CodexMcpToolset {
 				type: "string",
 				default: "",
 				required: true,
+				description:
+					"HTTP MCP 서버의 streamable-http 엔드포인트 URL입니다.",
 				displayOptions: {
 					show: {
 						serverSource: ["http"],
@@ -112,6 +122,8 @@ class CodexMcpToolset {
 				name: "bearerTokenEnvVar",
 				type: "string",
 				default: "",
+				description:
+					"Bearer 토큰이 저장된 환경변수 이름입니다. 인증이 필요 없으면 비워 두세요.",
 				displayOptions: {
 					show: {
 						serverSource: ["http"],
@@ -124,6 +136,8 @@ class CodexMcpToolset {
 				type: "string",
 				default: "",
 				required: true,
+				description:
+					"stdio MCP 서버를 실행할 명령어입니다 (예: npx, python, node).",
 				displayOptions: {
 					show: {
 						serverSource: ["stdio"],
@@ -136,6 +150,8 @@ class CodexMcpToolset {
 				type: "string",
 				typeOptions: { rows: 4 },
 				default: "",
+				description:
+					'명령어에 전달할 인자 배열을 JSON 형식으로 입력합니다 (예: ["-y", "@modelcontextprotocol/server-filesystem"]).',
 				displayOptions: {
 					show: {
 						serverSource: ["stdio"],
@@ -148,6 +164,8 @@ class CodexMcpToolset {
 				type: "string",
 				typeOptions: { rows: 4 },
 				default: "",
+				description:
+					'MCP 서버 프로세스에 전달할 환경변수를 JSON 객체로 입력합니다 (예: {"API_KEY": "xxx"}).',
 				displayOptions: {
 					show: {
 						serverSource: ["stdio"],

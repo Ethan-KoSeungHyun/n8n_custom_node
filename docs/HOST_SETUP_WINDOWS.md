@@ -54,10 +54,26 @@ The export should include:
 
 - `CUSTOM.codexAgent`
 - `CUSTOM.codexAgentTool`
+- `CUSTOM.codexAgentRegistry`
 - `CUSTOM.codexMemory`
 - `CUSTOM.codexMcpToolset`
 
-## 6. Recommended runtime split
+## 6. Windows-specific notes
+
+### Path separators
+- `.env`에서 `N8N_CUSTOM_EXTENSIONS`는 forward slash(`D:/...`)를 사용해야 한다. n8n이 내부적으로 정규화한다.
+- 노드의 `Working Directory`는 backslash(`D:\...`)와 forward slash 모두 허용된다.
+
+### Codex CLI path
+- Windows에서 codex는 `codex.cmd` 래퍼로 설치된다. credential의 `Codex Executable Path`에 `C:\...\codex.cmd`를 설정하면 SDK가 자체 경로 해석을 대신 사용한다 (`.cmd` 래퍼는 SDK가 직접 지원하지 않음).
+- `codex`가 시스템 PATH에 있으면 credential에 경로를 비워두는 것이 가장 안정적이다.
+
+### Auth bridge
+- Windows에서 로컬로 실행 시 인증 브릿지는 `http://localhost:3481`에서 자동 시작된다.
+- credential의 `Bridge Environment`는 `local`로 설정한다.
+- 원격 접근이 필요하면 별도의 터널(Cloudflare 등) 구성이 필요하다.
+
+## 7. Recommended runtime split
 
 - `D:\Project\N8N_SERVER`: n8n runtime, DB, logs, local scripts, local state
 - `D:\Project\N8N_SERVER\n8n_custom_node`: shared custom node source, shared dependencies, and docs

@@ -44,7 +44,7 @@ If a specific `Codex Agent` or `Codex CLI` run should use the shared repo itself
 - Windows host setup: `docs/HOST_SETUP_WINDOWS.md`
 - macOS host setup: `docs/HOST_SETUP_MACOS.md`
 - Linux host setup: `docs/HOST_SETUP_LINUX.md`
-- Migration from a local `N8N_SERVER/custom`: `docs/MIGRATION_FROM_N8N_SERVER.md`
+- Architecture overview: `docs/ARCHITECTURE.md`
 - Host `.env` example: `docs/examples/.env.host.example`
 
 ## Repo layout

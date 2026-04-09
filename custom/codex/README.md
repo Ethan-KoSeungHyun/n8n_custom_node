@@ -30,7 +30,7 @@ npm install
 - 공용 노드 가이드: `../../docs/CODEX_N8N_NODE.md`
 - Windows 호스트 설정: `../../docs/HOST_SETUP_WINDOWS.md`
 - Linux 호스트 설정: `../../docs/HOST_SETUP_LINUX.md`
-- 마이그레이션 가이드: `../../docs/MIGRATION_FROM_N8N_SERVER.md`
+- 아키텍처: `../../docs/ARCHITECTURE.md`
 
 ## 왜 여기에는 local node_modules가 없는가
 

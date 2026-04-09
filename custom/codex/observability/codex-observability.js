@@ -582,10 +582,12 @@ function captureGitArtifacts(workingDirectory) {
 
 function runGitCommand(cwd, args) {
 	try {
+		const isWindows = process.platform === "win32";
 		const result = spawnSync("git", args, {
 			cwd,
 			encoding: "utf8",
 			windowsHide: true,
+			shell: isWindows,
 			timeout: 15000,
 		});
 

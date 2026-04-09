@@ -10,10 +10,32 @@ const {
 	shouldSkipGitRepoCheck,
 } = require("./codex-runtime-utils");
 
+const TOOL_EVENT_TYPES = new Set([
+	"tool.started",
+	"tool.completed",
+	"tool_use",
+	"item.completed",
+]);
+
+function isToolEvent(event) {
+	if (TOOL_EVENT_TYPES.has(event?.type)) return true;
+	if (event?.item?.type === "tool_use" || event?.item?.type === "tool_result") return true;
+	return false;
+}
+
 function resolveSdkCodexPath(codexExecutable) {
 	if (!codexExecutable) return undefined;
 	const extension = path.extname(codexExecutable).toLowerCase();
-	if (extension === ".cmd" || extension === ".bat") return undefined;
+	if (extension === ".cmd" || extension === ".bat") {
+		// Windows .cmd/.bat wrappers are not directly supported by the SDK.
+		// SDK will use its own path resolution instead.
+		if (process.env.DEBUG || process.env.NODE_ENV === "development") {
+			console.warn(
+				`[codex-sdk] Ignoring .cmd/.bat codex path "${codexExecutable}" — SDK will resolve its own path.`,
+			);
+		}
+		return undefined;
+	}
 	return codexExecutable;
 }
 
@@ -92,8 +114,14 @@ async function runSdkAgent(request) {
 						: undefined,
 			});
 			for await (const event of streamed.events) {
+				if (isToolEvent(event)) {
+					await request.lifecycleHooks?.preToolUse?.(event, request);
+				}
 				events.push(event);
 				await request.hooks?.onEvent?.(event);
+				if (isToolEvent(event)) {
+					await request.lifecycleHooks?.postToolUse?.(event, request);
+				}
 			}
 		} finally {
 			await request.hooks?.onStreamEnd?.();
@@ -119,7 +147,13 @@ async function runSdkAgent(request) {
 		}
 
 		if (turnFailure) {
-			throw new Error(turnFailure.message);
+			const err = new Error(turnFailure.message || "Codex turn failed");
+			err.details = {
+				code: turnFailure.code,
+				type: turnFailure.type,
+				threadId: thread?.id,
+			};
+			throw err;
 		}
 
 		return {

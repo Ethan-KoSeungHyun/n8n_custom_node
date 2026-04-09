@@ -1,0 +1,262 @@
+{
+    "updatedAt": "2026-04-09T12:55:21.896Z",
+    "createdAt": "2026-04-09T12:50:18.383Z",
+    "id": "Fnhq80HOVrzLgRgE",
+    "name": "[Example] 03 - Registry + Memory + MCP \ud1b5\ud569",
+    "description": null,
+    "active": false,
+    "isArchived": false,
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "codex-full-demo",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "id": "trigger-webhook",
+            "name": "Webhook Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                208,
+                400
+            ],
+            "webhookId": "codex-full-demo"
+        },
+        {
+            "parameters": {
+                "operation": "register",
+                "agentKey": "file-analyzer",
+                "displayName": "File Analyzer",
+                "description": "\ud30c\uc77c \uc2dc\uc2a4\ud15c\uc744 \ubd84\uc11d\ud558\uace0 \uad6c\uc870\ub97c \ud30c\uc545\ud558\ub294 \uc804\ubb38 \uc5d0\uc774\uc804\ud2b8",
+                "capabilities": "file-analysis, directory-scan, code-structure",
+                "defaultSystemInstructions": "\ub2f9\uc2e0\uc740 \ud30c\uc77c \uc2dc\uc2a4\ud15c \ubd84\uc11d \uc804\ubb38\uac00\uc785\ub2c8\ub2e4. \ub514\ub809\ud130\ub9ac \uad6c\uc870, \ud30c\uc77c \uad00\uacc4, \ucf54\ub4dc \uc544\ud0a4\ud14d\ucc98\ub97c \ubd84\uc11d\ud558\uc5ec \uba85\ud655\ud55c \ubcf4\uace0\uc11c\ub97c \uc791\uc131\ud558\uc138\uc694.",
+                "defaultSandbox": "read-only",
+                "priority": 10
+            },
+            "id": "registry-register",
+            "name": "Register Agent",
+            "type": "CUSTOM.codexAgentRegistry",
+            "typeVersion": 1,
+            "position": [
+                512,
+                208
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "lookup",
+                "capabilityQuery": "file-analysis"
+            },
+            "id": "registry-lookup",
+            "name": "Lookup Agent",
+            "type": "CUSTOM.codexAgentRegistry",
+            "typeVersion": 1,
+            "position": [
+                800,
+                208
+            ]
+        },
+        {
+            "parameters": {
+                "prompt": "={{ $json.body.prompt || '\ud604\uc7ac \ub514\ub809\ud130\ub9ac\uc758 \ud30c\uc77c \uad6c\uc870\ub97c \ubd84\uc11d\ud558\uace0 \uc8fc\uc694 \ud30c\uc77c\ub4e4\uc758 \uc5ed\ud560\uc744 \uc124\uba85\ud574\uc8fc\uc138\uc694.' }}",
+                "systemInstructions": "\uc0ac\uc6a9\uc790\uc758 \uc694\uccad\uc5d0 \ub530\ub77c \uc801\uc808\ud55c \uc804\ubb38\uac00 tool\uc744 \uc0ac\uc6a9\ud558\uc138\uc694.",
+                "modelPreset": "gpt-5.4",
+                "sessionId": "={{ $json.body.sessionId || 'demo-session' }}"
+            },
+            "id": "main-agent",
+            "name": "Codex Agent",
+            "type": "CUSTOM.codexAgent",
+            "typeVersion": 1,
+            "position": [
+                512,
+                512
+            ],
+            "credentials": {
+                "codexChatgptAccount": {
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Your Codex Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "agentProfileKey": "file-analyzer",
+                "name": "file_analyzer",
+                "description": "Use this tool to analyze file systems, scan directories, understand code structure, and generate reports about project organization."
+            },
+            "id": "tool-analyzer",
+            "name": "File Analyzer Tool",
+            "type": "CUSTOM.codexAgentTool",
+            "typeVersion": 1,
+            "position": [
+                512,
+                752
+            ],
+            "credentials": {
+                "codexChatgptAccount": {
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Your Codex Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "sessionKey": "={{ $json.body.sessionId || 'demo-session' }}",
+                "enablePersistentMemory": true,
+                "memoryScope": "project"
+            },
+            "id": "memory-persistent",
+            "name": "Codex Memory (Persistent)",
+            "type": "CUSTOM.codexMemory",
+            "typeVersion": 1,
+            "position": [
+                304,
+                704
+            ]
+        },
+        {
+            "parameters": {
+                "serverName": "filesystem",
+                "serverSource": "stdio",
+                "stdioCommand": "npx",
+                "stdioArgsJson": "[\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp/demo\"]"
+            },
+            "id": "mcp-filesystem",
+            "name": "MCP Filesystem",
+            "type": "CUSTOM.codexMcpToolset",
+            "typeVersion": 1,
+            "position": [
+                656,
+                928
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## 03 - Registry + Memory + MCP \ud1b5\ud569 \ub370\ubaa8\n\n### \uc774 \uc6cc\ud06c\ud50c\ub85c\uac00 \ubcf4\uc5ec\uc8fc\ub294 \uac83\n\n1. **Agent Registry**: \uc5d0\uc774\uc804\ud2b8 \ud504\ub85c\ud544 \ub4f1\ub85d \ubc0f capability \uae30\ubc18 Lookup\n2. **Persistent Memory**: \ub300\ud654 \uac04 \uba54\ubaa8\ub9ac \ucd95\uc801 \ubc0f \uc790\ub3d9 \uc800\uc7a5\n3. **MCP Toolset**: \uc678\ubd80 MCP \uc11c\ubc84(filesystem) \uc5f0\uacb0\n4. **Profile Loading**: AgentTool\uc774 Registry\uc5d0\uc11c \ud504\ub85c\ud544\uc744 \uc790\ub3d9 \ub85c\ub4dc\n\n### \ub370\uc774\ud130 \ud750\ub984\n```\nWebhook -> Register Agent(\ucd5c\ucd08 1\ud68c)\n        -> Codex Agent <- Memory(Persistent)\n              |-- Tool: File Analyzer <- MCP(filesystem)\n                  (agentProfileKey: file-analyzer)\n                  -> Registry\uc5d0\uc11c \ud504\ub85c\ud544 \ub85c\ub4dc\n                  -> \ubaa8\ub378, \uc9c0\uce68, \uc0cc\ub4dc\ubc15\uc2a4 \uc790\ub3d9 \uc801\uc6a9\n```\n\n### Persistent Memory \ub3d9\uc791\n- \ub300\ud654 \uc911 `[\uba54\ubaa8\ub9ac \uc800\uc7a5] \ud504\ub85c\uc81d\ud2b8\ub294 Node.js \uae30\ubc18` \uac19\uc740 \uc751\ub2f5\uc774 \ub098\uc624\uba74 \uc790\ub3d9 \uc800\uc7a5\ub429\ub2c8\ub2e4\n- \ub2e4\uc74c \ub300\ud654\uc5d0\uc11c \uc800\uc7a5\ub41c \uba54\ubaa8\ub9ac\uac00 \ud504\ub86c\ud504\ud2b8\uc5d0 \uc790\ub3d9 \uc8fc\uc785\ub429\ub2c8\ub2e4\n- Memory Scope = project\uc774\uba74 \ubaa8\ub4e0 \uc138\uc158\uc5d0\uc11c \uacf5\uc720\ub429\ub2c8\ub2e4",
+                "height": 544,
+                "width": 644
+            },
+            "id": "sticky-overview",
+            "name": "Sticky Note",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                1152,
+                96
+            ]
+        },
+        {
+            "parameters": {
+                "content": "## Agent Registry \uc0ac\uc6a9\ubc95\n\n### 1\ub2e8\uacc4: \ud504\ub85c\ud544 \ub4f1\ub85d\nCodex Agent Registry \ub178\ub4dc\uc5d0\uc11c operation=register\ub85c \uc5d0\uc774\uc804\ud2b8 \ud504\ub85c\ud544\uc744 \ub4f1\ub85d\ud569\ub2c8\ub2e4.\n\n### 2\ub2e8\uacc4: AgentTool\uc5d0 \ud504\ub85c\ud544 \uc5f0\uacb0\nCodex Agent Tool\uc758 **Agent Profile Key** \ud544\ub4dc\uc5d0 \ub4f1\ub85d\ud55c agentKey\ub97c \uc785\ub825\ud569\ub2c8\ub2e4.\n\n### 3\ub2e8\uacc4: \uc790\ub3d9 \uc801\uc6a9\n\ud504\ub85c\ud544\uc5d0 \uc124\uc815\ub41c \ubaa8\ub378, \uc2dc\uc2a4\ud15c \uc9c0\uce68, \uc0cc\ub4dc\ubc15\uc2a4, MCP \uc11c\ubc84\uac00 \uc790\ub3d9\uc73c\ub85c \uc801\uc6a9\ub429\ub2c8\ub2e4.\n\n### \uc6b0\uc120\uc21c\uc704\n```\nRegistry \uae30\ubcf8\uac12 < \ub178\ub4dc \uc9c1\uc811 \uc124\uc815 < \ud638\ucd9c \uc2dc \ud30c\ub77c\ubbf8\ud130\n```\n\n\ub178\ub4dc\uc5d0\uc11c \uc9c1\uc811 \uc124\uc815\ud55c \uac12\uc774 \uc788\uc73c\uba74 Registry \uac12\ubcf4\ub2e4 \uc6b0\uc120\ud569\ub2c8\ub2e4.",
+                "height": 456,
+                "width": 644
+            },
+            "id": "sticky-registry",
+            "name": "Sticky Note1",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                1152,
+                656
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Register Agent",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Codex Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Register Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Lookup Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Codex Memory (Persistent)": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "Codex Agent",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "File Analyzer Tool": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Codex Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "MCP Filesystem": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "File Analyzer Tool",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "callerPolicy": "workflowsFromSameOwner",
+        "availableInMCP": false,
+        "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": null,
+    "pinData": {},
+    "versionId": "0071d006-833e-41b4-a8a9-6d806562d0cc",
+    "activeVersionId": null,
+    "versionCounter": 10,
+    "triggerCount": 0,
+    "shared": [
+        {
+            "updatedAt": "2026-04-09T12:50:18.385Z",
+            "createdAt": "2026-04-09T12:50:18.385Z",
+            "role": "workflow:owner",
+            "workflowId": "Fnhq80HOVrzLgRgE",
+            "projectId": "yMaXW7vuBFc1XI97",
+            "project": {
+                "updatedAt": "2026-03-25T11:22:27.033Z",
+                "createdAt": "2026-03-25T11:21:04.972Z",
+                "id": "yMaXW7vuBFc1XI97",
+                "name": "Seunghyun Ko <gsh0894@naver.com>",
+                "type": "personal",
+                "icon": null,
+                "description": null,
+                "creatorId": "9b7617e9-3225-4b43-bf32-be8d106bc3b6"
+            }
+        }
+    ],
+    "tags": [],
+    "activeVersion": null
+}

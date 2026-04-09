@@ -21,6 +21,13 @@ const {
 	getSessionBinding,
 } = require("../store/codex-store");
 const { runSdkAgent } = require("./sdk-runtime");
+const { createMemory } = require("../store/codex-memory-store");
+const { createLifecycleHooks } = require("../lib/codex-hooks");
+const {
+	buildSharedContext,
+	buildDelegationContext,
+	sendMessage,
+} = require("../store/codex-agent-message-store");
 
 function truncatePrompt(value, maxLength = 2000) {
 	const text = String(value || "");
@@ -31,11 +38,15 @@ function truncatePrompt(value, maxLength = 2000) {
 function shouldRecoverThread(error) {
 	const message = String(error?.message || "").toLowerCase();
 	return (
-		(message.includes("thread") || message.includes("session")) &&
-		(message.includes("not found") ||
-			message.includes("invalid") ||
-			message.includes("missing") ||
-			message.includes("unknown"))
+		((message.includes("thread") || message.includes("session")) &&
+			(message.includes("not found") ||
+				message.includes("invalid") ||
+				message.includes("missing") ||
+				message.includes("unknown"))) ||
+		message.includes("no rollout found") ||
+		message.includes("expired") ||
+		(message.includes("does not exist") &&
+			(message.includes("thread") || message.includes("session")))
 	);
 }
 
@@ -257,12 +268,41 @@ async function executeAgentRun(request) {
 		},
 	});
 
+	const lifecycle = createLifecycleHooks(request.nodeHooks);
+
 	try {
+		await lifecycle.preAgentStart(request);
+
+		// Inject persistent memory into system instructions if available
+		let effectiveSystemInstructions = request.systemInstructions || "";
+		if (request.memory?.enablePersistentMemory && request.memory?.memoryPromptSection) {
+			effectiveSystemInstructions += request.memory.memoryPromptSection;
+		}
+
+		// Inject orchestration context if this is a delegated sub-agent
+		if (request.orchestrationId && request.agentKey) {
+			try {
+				const delegationCtx = await buildDelegationContext(
+					request.orchestrationId,
+					request.agentKey,
+				);
+				const sharedCtx = await buildSharedContext(
+					request.orchestrationId,
+					request.agentKey,
+				);
+				effectiveSystemInstructions += delegationCtx + sharedCtx;
+			} catch {
+				// Orchestration context failure should not block execution
+			}
+		}
+
 		const result = await executeWithRuntime({
 			...request,
+			systemInstructions: effectiveSystemInstructions,
 			runtime,
 			threadId: effectiveThreadId,
 			transcriptEntries,
+			lifecycleHooks: lifecycle,
 		});
 
 		const normalizedEvents = normalizeEvents(result.events, result.threadId || null);
@@ -330,6 +370,46 @@ async function executeAgentRun(request) {
 			},
 		});
 
+		// Auto-save memory if enabled
+		if (
+			request.memory?.autoSaveMemories &&
+			result.finalResponse
+		) {
+			try {
+				await autoExtractAndSaveMemories(request, result);
+			} catch {
+				// Memory save failure should not block the main response
+			}
+		}
+
+		// Post-completion lifecycle hook
+		try {
+			await lifecycle.postAgentComplete(request, result);
+		} catch {
+			// Hook failure should not block main response
+		}
+
+		// Send result message if part of an orchestration
+		if (request.orchestrationId && request.agentKey) {
+			try {
+				await sendMessage({
+					orchestrationId: request.orchestrationId,
+					fromAgent: request.agentKey,
+					toAgent: request.orchestratorKey || "orchestrator",
+					messageType: "result",
+					content: result.finalResponse || "",
+					metadata: {
+						threadId: result.threadId,
+						runId: runStart.id,
+						usage: result.usage,
+					},
+					status: "pending",
+				});
+			} catch {
+				// Message send failure should not block main response
+			}
+		}
+
 		return buildRunResultPayload(
 			{ ...request, runStart, runtime },
 			result,
@@ -352,17 +432,68 @@ async function executeAgentRun(request) {
 			});
 		}
 
+		try {
+			await lifecycle.onError(request, error);
+		} catch {
+			// Hook failure should not block error handling
+		}
+
 		const endedAt = nowIso();
 		await completeRun(runStart.id, {
 			status: "failed",
-			threadId: effectiveThreadId || null,
+			threadId: effectiveThreadId || error?.details?.threadId || null,
 			endedAt,
 			durationMs:
 				new Date(endedAt).getTime() - new Date(runStart.startedAt).getTime(),
 			stderr: error?.details?.stderr || "",
 			errorMessage: error.message,
+			metadata: error?.details
+				? { turnFailureDetails: error.details }
+				: undefined,
 		});
 		throw error;
+	}
+}
+
+const MEMORY_MARKERS = [
+	/\[MEMORY_SAVE\]\s*(.*)/gi,
+	/\[REMEMBER\]\s*(.*)/gi,
+	/\[메모리 저장\]\s*(.*)/gi,
+];
+
+async function autoExtractAndSaveMemories(request, result) {
+	const response = result.finalResponse || "";
+	const extracted = [];
+
+	for (const pattern of MEMORY_MARKERS) {
+		let match;
+		pattern.lastIndex = 0;
+		while ((match = pattern.exec(response)) !== null) {
+			const content = match[1].trim();
+			if (content) extracted.push(content);
+		}
+	}
+
+	// Also save a context memory for each completed session turn
+	if (extracted.length === 0 && request.prompt) {
+		const preview =
+			response.length > 200 ? response.slice(0, 200) + "..." : response;
+		extracted.push(
+			`Q: ${truncatePrompt(request.prompt, 100)} → A: ${preview}`,
+		);
+	}
+
+	for (const content of extracted) {
+		await createMemory({
+			scope: request.memory?.memoryScope || request.memory?.scope || "session",
+			agentKey: request.nodeId || null,
+			sessionId: request.sessionId || null,
+			profileKey: request.profileKey || null,
+			category: "context",
+			content,
+			tags: [],
+			relevanceScore: 0.7,
+		});
 	}
 }
 

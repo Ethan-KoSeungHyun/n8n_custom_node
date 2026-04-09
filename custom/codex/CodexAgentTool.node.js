@@ -14,6 +14,7 @@ const { executeAgentRun } = require("./runtime/codex-service");
 const {
 	assertSavedMcpServerConfig,
 	buildCodexMcpConfig,
+	buildSharedOptionFields,
 	describeConfiguredMcpToolsets,
 	getBaseNodeContext,
 	getConnectedCodexMemory,
@@ -22,6 +23,8 @@ const {
 	resolveModelField,
 	resolveSessionIdField,
 } = require("./lib/node-runtime-helpers");
+const { getAgentByKey } = require("./store/codex-agent-registry-store");
+const { wrapHooksWithBridge } = require("./lib/node-ui-helpers");
 
 class CodexAgentTool {
 	description = {
@@ -30,7 +33,7 @@ class CodexAgentTool {
 		icon: { light: "file:codex.svg", dark: "file:codex.svg" },
 		group: ["transform"],
 		version: 1,
-		description: "Expose Codex as an AI tool that other n8n AI Agents can call",
+		description: "Codex를 AI Tool로 노출하여 다른 n8n AI Agent가 서브에이전트로 호출할 수 있게 합니다.",
 		defaults: {
 			name: "Codex Agent Tool",
 			color: "#404040",
@@ -78,6 +81,14 @@ class CodexAgentTool {
 				name: "recommendedToolSetupNotice",
 				type: "notice",
 				default: "",
+			},
+			{
+				displayName: "Agent Profile Key",
+				name: "agentProfileKey",
+				type: "string",
+				default: "",
+				description:
+					"Agent Registry에 등록된 프로필 키를 입력하면 기본 모델, 시스템 프롬프트, 샌드박스, MCP 서버 설정을 자동으로 불러옵니다. 비워 두면 수동 설정을 사용합니다.",
 			},
 			{
 				displayName: "Name",
@@ -224,7 +235,20 @@ class CodexAgentTool {
 				description:
 					"최종 응답 형식을 강제할 선택형 JSON Schema입니다. 가능하면 파싱된 JSON 결과도 함께 반환합니다.",
 			},
-			...buildToolOptionFields(),
+			...buildSharedOptionFields({
+				sandboxDescription:
+					"Codex 서브 에이전트가 파일을 읽기만 할지, 워크스페이스 안에서 쓰기까지 할지, 더 넓은 시스템 접근을 허용할지 정합니다.",
+				approvalDescription:
+					"민감한 작업 전에 언제 사용자 승인을 요청할지 정합니다.",
+				webSearchDescription:
+					"부모 에이전트를 처리하는 동안 웹 검색을 사용할 수 있는지 정합니다.",
+				ephemeralDefault: true,
+				ephemeralDescription:
+					"기본적으로 격리 실행을 사용해 이 tool이 독립된 서브 에이전트처럼 동작하게 합니다.",
+				parseFinalResponseAsJsonDefault: true,
+				parseFinalResponseAsJsonDescription:
+					"최종 응답을 JSON으로 파싱해 parsed 결과와 함께 반환합니다.",
+			}),
 		],
 	};
 
@@ -301,7 +325,27 @@ function createTool(context, itemIndex, log = true) {
 			const toolsets = await getConnectedCodexToolsets(context);
 			const mcpConfigured = describeConfiguredMcpToolsets(toolsets);
 			const memory = await getConnectedCodexMemory(context);
+			const toolHooks = wrapHooksWithBridge(
+				null,
+				memory?.loggingBridge || null,
+			);
 			assertSavedMcpServerConfig(toolsets, base.codexHome);
+
+			// Load agent profile from registry if specified
+			const agentProfileKey = context.getNodeParameter(
+				"agentProfileKey",
+				itemIndex,
+				"",
+			);
+			let agentProfile = null;
+			if (agentProfileKey) {
+				try {
+					agentProfile = await getAgentByKey(agentProfileKey);
+				} catch {
+					// Registry not available yet — use manual settings
+				}
+			}
+
 			const sessionStrategy = context.getNodeParameter(
 				"sessionStrategy",
 				itemIndex,
@@ -312,9 +356,13 @@ function createTool(context, itemIndex, log = true) {
 				itemIndex,
 				"",
 			);
-			const effectiveSystemInstructions = [defaultSystemPrompt, query.systemInstructions]
-				.filter(Boolean)
-				.join("\n\n");
+			// Merge profile system instructions with node-level and per-call instructions
+			const profileSystemInstructions = agentProfile?.defaultSystemInstructions || "";
+			const effectiveSystemInstructions = [
+				profileSystemInstructions,
+				defaultSystemPrompt,
+				query.systemInstructions,
+			].filter(Boolean).join("\n\n");
 			const defaultSessionId =
 				sessionStrategy === "autoResume"
 					? resolveSessionIdField(context, itemIndex, "sessionId") || null
@@ -328,6 +376,27 @@ function createTool(context, itemIndex, log = true) {
 				sessionStrategy === "specificThreadId"
 					? context.getNodeParameter("threadId", itemIndex, "")
 					: null;
+
+			// Apply profile defaults — node-level settings take precedence
+			const effectiveModel = resolveModelField(context, itemIndex) || agentProfile?.defaultModel || "";
+			const effectiveOptions = { ...options };
+			if (agentProfile?.defaultSandbox && !options.sandbox) {
+				effectiveOptions.sandbox = agentProfile.defaultSandbox;
+			}
+
+			// Merge registry MCP servers with node-connected MCP toolsets
+			const codexConfig = buildCodexMcpConfig(toolsets);
+			if (agentProfile?.defaultMcpServers?.length) {
+				if (!codexConfig.mcp_servers) codexConfig.mcp_servers = {};
+				for (const server of agentProfile.defaultMcpServers) {
+					if (server.serverName && !codexConfig.mcp_servers[server.serverName]) {
+						codexConfig.mcp_servers[server.serverName] = {
+							command: server.command || "",
+							args: server.args || [],
+						};
+					}
+				}
+			}
 
 			const result = await executeAgentRun({
 				resource: "agent",
@@ -345,15 +414,17 @@ function createTool(context, itemIndex, log = true) {
 				workingDirectory: base.workingDirectory,
 				prompt: query.prompt,
 				systemInstructions: effectiveSystemInstructions,
-				model: resolveModelField(context, itemIndex),
-				options,
+				model: effectiveModel,
+				options: effectiveOptions,
 				sessionStrategy,
 				sessionId,
 				threadId,
 				resumeLast: sessionStrategy === "lastThread",
 				memory,
 				mcpConfigured,
-				codexConfig: buildCodexMcpConfig(toolsets, base.codexHome),
+				codexConfig,
+				agentKey: agentProfileKey || null,
+				hooks: toolHooks || undefined,
 			});
 
 			const parsedOutput =
@@ -453,218 +524,6 @@ function normalizeStandaloneInput(input) {
 				? input.systemInstructions
 				: undefined,
 	};
-}
-
-function buildToolOptionFields() {
-	return [
-		{
-			displayName: "Sandbox",
-			name: "sandbox",
-			type: "options",
-			default: "workspace-write",
-			description:
-				"Codex 서브 에이전트가 파일을 읽기만 할지, 워크스페이스 안에서 쓰기까지 할지, 더 넓은 시스템 접근을 허용할지 정합니다.",
-			options: [
-				{ name: "Read Only", value: "read-only" },
-				{ name: "Workspace Write", value: "workspace-write" },
-				{ name: "Danger Full Access", value: "danger-full-access" },
-			],
-		},
-		{
-			displayName: "Approval Policy",
-			name: "approvalPolicy",
-			type: "options",
-			default: "on-request",
-			description:
-				"민감한 작업 전에 언제 사용자 승인을 요청할지 정합니다.",
-			options: [
-				{ name: "Never", value: "never" },
-				{ name: "On Request", value: "on-request" },
-				{ name: "On Failure", value: "on-failure" },
-				{ name: "Untrusted", value: "untrusted" },
-			],
-		},
-		{
-			displayName: "Web Search",
-			name: "webSearch",
-			type: "options",
-			default: "live",
-			description:
-				"부모 에이전트를 처리하는 동안 웹 검색을 사용할 수 있는지 정합니다.",
-			options: [
-				{ name: "Live", value: "live" },
-				{ name: "Cached", value: "cached" },
-				{ name: "Disabled", value: "disabled" },
-			],
-		},
-		{
-			displayName: "Reasoning Effort",
-			name: "reasoningEffort",
-			type: "options",
-			default: "medium",
-			description:
-				"값이 높을수록 어려운 작업의 품질은 좋아질 수 있지만 시간과 토큰을 더 사용합니다.",
-			options: [
-				{ name: "Minimal", value: "minimal" },
-				{ name: "Low", value: "low" },
-				{ name: "Medium", value: "medium" },
-				{ name: "High", value: "high" },
-				{ name: "Extra High", value: "xhigh" },
-			],
-		},
-		{
-			displayName: "Verbosity",
-			name: "verbosity",
-			type: "options",
-			default: "medium",
-			description:
-				"Codex 응답을 얼마나 짧게 또는 자세하게 만들지 정합니다.",
-			options: [
-				{ name: "Low", value: "low" },
-				{ name: "Medium", value: "medium" },
-				{ name: "High", value: "high" },
-			],
-		},
-		{
-			displayName: "Ephemeral",
-			name: "ephemeral",
-			type: "boolean",
-			default: true,
-			description:
-				"기본적으로 격리 실행을 사용해 이 tool이 독립된 서브 에이전트처럼 동작하게 합니다.",
-		},
-		{
-			displayName: "Full Auto",
-			name: "fullAuto",
-			type: "boolean",
-			default: false,
-			description:
-				"선택한 sandbox와 approval policy 안에서 Codex가 더 자율적으로 행동하게 합니다.",
-		},
-		{
-			displayName: "Include Events In Output",
-			name: "includeEvents",
-			type: "boolean",
-			default: false,
-			description:
-				'디버깅용으로 SDK thread 이벤트 원문을 반환 payload에 포함합니다. n8n의 Logs 패널을 채우는 것은 아니고, 반환 결과에만 추가됩니다.',
-		},
-		{
-			displayName: "Event Payload Detail",
-			name: "eventPayloadDetail",
-			type: "options",
-			default: "summary",
-			description:
-				'"events" 출력에 요약만 넣을지, 원본 payload 전체를 넣을지 정합니다.',
-			options: [
-				{ name: "Summary", value: "summary" },
-				{ name: "Full Raw Payload", value: "full" },
-			],
-			displayOptions: {
-				show: {
-					includeEvents: [true],
-				},
-			},
-		},
-		{
-			displayName: "Event Content Max Length",
-			name: "eventContentMaxLength",
-			type: "number",
-			default: 400,
-			description:
-				'Event Payload Detail이 Summary일 때 긴 이벤트 텍스트와 MCP payload를 이 길이까지 잘라서 반환합니다.',
-			displayOptions: {
-				show: {
-					includeEvents: [true],
-					eventPayloadDetail: ["summary"],
-				},
-			},
-		},
-		{
-			displayName: "Streaming",
-			name: "streaming",
-			type: "boolean",
-			default: false,
-			description:
-				"SDK 스트리밍 경로를 사용합니다. 현재 n8n 실행 UI가 실시간 청크 표시를 지원하면 응답이 진행 중에 바로 보이고, 그렇지 않으면 내부적으로만 스트리밍한 뒤 마지막에 한 번에 반환합니다.",
-		},
-		{
-			displayName: "Skip Git Repo Check",
-			name: "skipGitRepoCheck",
-			type: "boolean",
-			default: false,
-			description:
-				"보통은 끄고 사용하세요. Git 저장소가 아닌 작업 디렉터리는 자동으로 감지해 건너뜁니다. 강제로 검사 우회를 시키고 싶을 때만 켜세요.",
-		},
-		{
-			displayName: "Enable Network Access",
-			name: "networkAccessEnabled",
-			type: "boolean",
-			default: false,
-			description:
-				"런타임과 sandbox가 허용하는 범위에서 Codex의 네트워크 접근을 허용합니다.",
-		},
-		{
-			displayName: "Additional Directories",
-			name: "additionalDirectories",
-			type: "string",
-			typeOptions: { rows: 3 },
-			default: "",
-			description:
-				"Codex가 추가로 읽거나 사용할 수 있는 경로 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
-		},
-		{
-			displayName: "Auto Compact Token Limit",
-			name: "autoCompactTokenLimit",
-			type: "number",
-			default: 0,
-			description:
-				"자동 compact를 시작할 토큰 기준값입니다. 0이면 Codex 기본 동작을 유지합니다.",
-		},
-		{
-			displayName: "Parse Final Response As JSON",
-			name: "parseFinalResponseAsJson",
-			type: "boolean",
-			default: true,
-			description:
-				"최종 응답을 JSON으로 파싱해 parsed 결과와 함께 반환합니다.",
-		},
-		{
-			displayName: "Use Workspace Skills",
-			name: "useWorkspaceSkills",
-			type: "boolean",
-			default: true,
-			description:
-				"작업 디렉터리에 `.codex/skills` 폴더가 있으면 자동으로 Codex에 노출합니다.",
-		},
-		{
-			displayName: "Additional Skill Paths",
-			name: "additionalSkillPaths",
-			type: "string",
-			typeOptions: { rows: 3 },
-			default: "",
-			description:
-				"워크스페이스 skill 외에 추가로 노출할 skill 디렉터리 목록입니다. 쉼표 또는 줄바꿈으로 구분합니다.",
-		},
-		{
-			displayName: "Advanced Config JSON",
-			name: "advancedConfigJson",
-			type: "string",
-			typeOptions: { rows: 6 },
-			default: "",
-			description:
-				"기본 필드만으로 부족할 때 raw Codex config를 직접 덮어쓸 수 있는 고급 설정입니다.",
-		},
-		{
-			displayName: "Extra Environment JSON",
-			name: "extraEnvJson",
-			type: "string",
-			typeOptions: { rows: 4 },
-			default: "",
-			description:
-				'Codex 프로세스에 추가로 주입할 환경 변수 JSON입니다. 예: {"HTTPS_PROXY":"http://proxy:8080"}',
-		},
-	];
 }
 
 exports.CodexAgentTool = CodexAgentTool;
