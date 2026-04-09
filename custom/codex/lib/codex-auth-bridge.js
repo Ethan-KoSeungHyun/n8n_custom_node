@@ -92,15 +92,20 @@ async function directUpdateN8nCredential(session, { connected, status, message }
 		if (!credential || credential.type !== "codexChatgptAccount") return;
 
 		const coreCredential = new Credentials(credential, credential.type, credential.data);
-		// connected: false 시 oauthTokenData를 null로 지워야 n8n이 "Connect" 버튼을 표시함.
-		// 값이 있으면 access_token이 비어있어도 n8n은 "Account connected"로 표시.
-		const tokenData = connected
-			? buildOauthTokenData(
-					{ ...session, status, message },
-					{ connected: true, status, message, lastLoginMethod: "" },
-			  )
-			: null;
-		coreCredential.updateData({ oauthTokenData: tokenData });
+		if (connected) {
+			// connected: true 시 oauthTokenData를 채워 n8n이 "Account connected"로 표시함.
+			const tokenData = buildOauthTokenData(
+				{ ...session, status, message },
+				{ connected: true, status, message, lastLoginMethod: "" },
+			);
+			coreCredential.updateData({ oauthTokenData: tokenData });
+		} else {
+			// connected: false 시 oauthTokenData 필드 자체를 삭제해야 n8n이 "Connect" 버튼을 표시함.
+			// null로 저장하면 n8n 로딩 시 "Cannot read properties of null (reading 'toString')" 에러 발생.
+			const data = coreCredential.getData();
+			delete data.oauthTokenData;
+			coreCredential.setData(data);
+		}
 		await credentialsRepository.update(credential.id, {
 			...coreCredential.getDataToSave(),
 			updatedAt: new Date(),
@@ -626,16 +631,25 @@ async function finalizeLoginFlow(session, exitCode, signal) {
 					preferredProfileKey,
 				);
 				await refreshSessionProfileState(session, { clearCompletion: true });
-			} catch {}
+			} catch {
+				// rename 실패 시 (대상 디렉토리가 이미 존재하는 등): preferredProfileKey가
+				// 이미 connected 상태라면 그쪽으로 세션을 전환한다.
+				// 이렇게 하지 않으면 임시 profileKey가 credential에 저장되어
+				// 이후 팝업이 올바른 프로파일을 찾지 못하는 버그가 발생한다.
+				const preferred = await readProfileState({
+					profileKey: preferredProfileKey,
+					codexExecutable: session.codexExecutable,
+				});
+				if (preferred.connected) {
+					session.profileKey = preferredProfileKey;
+					await refreshSessionProfileState(session, { clearCompletion: true });
+				}
+			}
 		}
 		session.message = "Codex 계정 연결이 완료되었습니다. n8n으로 돌아갑니다.";
-		// 1) DB 직접 업데이트 (OAuth popup callback 실패 시 fallback)
-		await directUpdateN8nCredential(session, {
-			connected: true,
-			status: session.status,
-			message: session.message,
-		});
-		// 2) popup 리다이렉트용 callback URL 생성 (정상 popup 흐름 지원)
+		// popup OAuth callback 흐름으로 n8n이 credential을 업데이트하도록 함
+		// (directUpdateN8nCredential을 connected=true에서 먼저 호출하면
+		//  n8n의 OAuth callback postMessage 처리가 달라져 UI가 초록으로 갱신되지 않는 문제)
 		completeSession(session, { connected: true });
 		return;
 	}
@@ -1060,9 +1074,19 @@ function renderAuthorizePage(session) {
 
 				<!-- 버튼 그룹: 연결된 상태 -->
 				<div id="btnGroupConnected" class="btn-group" style="display:none">
-					<button class="btn btn-primary" id="btnRelogin" onclick="runAction('browser')">↺ 재로그인</button>
+					<button class="btn btn-primary" id="btnRelogin" onclick="runAction('device')">↺ 재로그인 (Device Code)</button>
 					<button class="btn btn-secondary" id="btnRefreshConn" onclick="runAction('refresh')">상태 확인</button>
-					<button class="btn btn-danger btn-sm" id="btnReset" onclick="confirmReset()">초기화</button>
+					<button class="btn btn-danger btn-sm" id="btnReset" onclick="showResetConfirm()">초기화</button>
+				</div>
+
+				<!-- 초기화 인라인 확인 -->
+				<div id="resetConfirm" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;">
+					<div style="font-weight:600;color:#991b1b;margin-bottom:8px;">⚠ 인증을 완전히 초기화합니다.</div>
+					<div style="color:#7f1d1d;margin-bottom:10px;">로그아웃되며 저장된 토큰이 삭제됩니다. 계속하시겠습니까?</div>
+					<div style="display:flex;gap:8px;">
+						<button class="btn btn-danger btn-sm" onclick="doReset()">초기화 확인</button>
+						<button class="btn btn-secondary btn-sm" onclick="hideResetConfirm()">취소</button>
+					</div>
 				</div>
 
 				<!-- 버튼 그룹: 연결 안 된 상태 -->
@@ -1185,6 +1209,8 @@ function renderAuthorizePage(session) {
 			const isRunning = Boolean(data.currentlyRunning);
 			document.getElementById('btnGroupConnected').style.display = (isConnected && !isRunning) ? 'flex' : 'none';
 			document.getElementById('btnGroupDisconnected').style.display = (!isConnected && !isRunning) ? 'flex' : 'none';
+			// 상태가 바뀌면 초기화 확인창 자동으로 닫기
+			if (!isConnected) hideResetConfirm();
 
 			// 로그
 			const logs = data.logs && data.logs.length ? data.logs.join('\\n') : '';
@@ -1194,11 +1220,18 @@ function renderAuthorizePage(session) {
 			}
 		}
 
-		function confirmReset() {
+		function showResetConfirm() {
 			if (busy || redirecting) return;
-			if (confirm('인증을 완전히 초기화합니다.\\n로그아웃되며 저장된 토큰이 삭제됩니다.\\n계속하시겠습니까?')) {
-				runAction('purge');
-			}
+			document.getElementById('resetConfirm').style.display = 'block';
+		}
+
+		function hideResetConfirm() {
+			document.getElementById('resetConfirm').style.display = 'none';
+		}
+
+		function doReset() {
+			hideResetConfirm();
+			runAction('purge');
 		}
 
 		async function fetchState() {

@@ -154,7 +154,7 @@ Recommended field defaults:
 Install the shared custom-node dependencies from the shared repo root:
 
 ```powershell
-cd /absolute/path/to/n8n_server_github
+cd /absolute/path/to/n8n_custom_node
 npm install
 ```
 

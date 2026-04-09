@@ -1,11 +1,11 @@
 # macOS Host Setup
 
-This guide connects a macOS n8n runtime such as `/Users/you/N8N_SERVER` to the shared custom node repository at `/Users/you/N8N_SERVER/n8n_server_github`.
+This guide connects a macOS n8n runtime such as `/Users/you/N8N_SERVER` to the shared custom node repository at `/Users/you/N8N_SERVER/n8n_custom_node`.
 
 ## 1. Install shared custom-node dependencies
 
 ```bash
-cd /Users/you/N8N_SERVER/n8n_server_github
+cd /Users/you/N8N_SERVER/n8n_custom_node
 npm install
 ```
 
@@ -16,7 +16,7 @@ Run `npm install` only at the shared repo root, never inside `custom/codex`.
 Set this in the macOS host's local `.env`:
 
 ```text
-N8N_CUSTOM_EXTENSIONS=/Users/you/N8N_SERVER/n8n_server_github/custom
+N8N_CUSTOM_EXTENSIONS=/Users/you/N8N_SERVER/n8n_custom_node/custom
 ```
 
 Keep runtime-specific files in the local runtime folder, not in the shared repo.
@@ -28,7 +28,7 @@ By default, the Codex nodes use the host runtime folder as their working directo
 If a workflow should operate on the shared repo itself, set the node's `Working Directory` explicitly to:
 
 ```text
-/Users/you/N8N_SERVER/n8n_server_github
+/Users/you/N8N_SERVER/n8n_custom_node
 ```
 
 ## 4. Host-local Codex state
@@ -44,6 +44,6 @@ CODEX_CLI_PATH=/opt/homebrew/bin/codex
 ## 5. Recommended runtime split
 
 - `/Users/you/N8N_SERVER`: n8n runtime, DB, logs, local scripts, local state
-- `/Users/you/N8N_SERVER/n8n_server_github`: shared custom node source, shared dependencies, and docs
+- `/Users/you/N8N_SERVER/n8n_custom_node`: shared custom node source, shared dependencies, and docs
 
 Do not store host-specific runtime files in the shared repo.

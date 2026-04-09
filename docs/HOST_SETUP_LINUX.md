@@ -7,13 +7,13 @@ This guide connects a Linux n8n runtime to the shared custom node repository clo
 Example:
 
 ```bash
-git clone <your-remote-url> /srv/N8N_SERVER/n8n_server_github
+git clone <your-remote-url> /srv/N8N_SERVER/n8n_custom_node
 ```
 
 ## 2. Install shared custom-node dependencies
 
 ```bash
-cd /srv/N8N_SERVER/n8n_server_github
+cd /srv/N8N_SERVER/n8n_custom_node
 npm install
 ```
 
@@ -22,14 +22,14 @@ npm install
 Set this in the Linux host's local `.env` or service environment:
 
 ```text
-N8N_CUSTOM_EXTENSIONS=/srv/N8N_SERVER/n8n_server_github/custom
+N8N_CUSTOM_EXTENSIONS=/srv/N8N_SERVER/n8n_custom_node/custom
 ```
 
 Keep the n8n runtime, DB, logs, and service-manager files outside the shared repo.
-Run `npm install` only in `/srv/N8N_SERVER/n8n_server_github`, never in `custom/codex`.
+Run `npm install` only in `/srv/N8N_SERVER/n8n_custom_node`, never in `custom/codex`.
 
 By default, the Codex nodes use the host runtime folder as their working directory because that is where n8n starts.
-If a workflow should operate on the shared repo itself, set the node's `Working Directory` explicitly to `/srv/N8N_SERVER/n8n_server_github`.
+If a workflow should operate on the shared repo itself, set the node's `Working Directory` explicitly to `/srv/N8N_SERVER/n8n_custom_node`.
 
 ## 4. Host-local Codex state
 
