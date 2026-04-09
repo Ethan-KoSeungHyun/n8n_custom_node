@@ -1,8 +1,15 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const { Container } = require("@n8n/di");
-const { DataSource } = require("@n8n/typeorm");
+const {
+	nowIso,
+	createId,
+	jsonStringify,
+	jsonParse,
+	getDataSource,
+	getDriverKind,
+	ph: placeholder,
+} = require("./codex-store-utils");
 
 const TABLES = {
 	sessionBindings: "codex_session_bindings",
@@ -13,88 +20,11 @@ const TABLES = {
 
 let schemaPromise;
 
-function nowIso() {
-	return new Date().toISOString();
-}
-
-function createId() {
-	return crypto.randomUUID();
-}
-
-function jsonStringify(value) {
-	if (value === undefined) return null;
-	return JSON.stringify(value);
-}
-
-function jsonParse(value, fallback = null) {
-	if (!value) return fallback;
-	try {
-		return JSON.parse(value);
-	} catch {
-		return fallback;
-	}
-}
-
-function getDataSource() {
-	const dataSource = Container.get(DataSource);
-
-	if (!dataSource || !dataSource.isInitialized) {
-		throw new Error(
-			"n8n DataSource is not available yet. Start n8n before executing Codex nodes.",
-		);
-	}
-
-	return dataSource;
-}
-
-function getDriverKind(dataSource) {
-	const type = String(dataSource.options?.type || "").toLowerCase();
-	if (type.includes("postgres")) return "postgres";
-	return "sqlite";
-}
-
-function placeholder(driverKind, index) {
-	return driverKind === "postgres" ? `$${index}` : "?";
-}
-
 function toBindingKey(parts) {
 	return crypto
 		.createHash("sha256")
 		.update(JSON.stringify(parts))
 		.digest("hex");
-}
-
-function mapRunRow(row) {
-	if (!row) return null;
-	return {
-		id: row.id,
-		workflowId: row.workflow_id,
-		nodeId: row.node_id,
-		executionId: row.execution_id,
-		resource: row.resource,
-		operation: row.operation,
-		runtime: row.runtime,
-		status: row.status,
-		sessionId: row.session_id,
-		threadId: row.thread_id,
-		promptPreview: row.prompt_preview,
-		model: row.model,
-		codexHome: row.codex_home,
-		profileKey: row.profile_key,
-		resolvedCredentialId: row.resolved_credential_id,
-		authFingerprintAtRun: row.auth_fingerprint_at_run,
-		workingDirectory: row.working_directory,
-		startedAt: row.started_at,
-		endedAt: row.ended_at,
-		durationMs: row.duration_ms,
-		inputTokens: row.input_tokens,
-		cachedInputTokens: row.cached_input_tokens,
-		outputTokens: row.output_tokens,
-		stderr: row.stderr,
-		finalResponse: row.final_response,
-		errorMessage: row.error_message,
-		metadata: jsonParse(row.metadata_json, {}),
-	};
 }
 
 function mapBindingRow(row) {
@@ -582,14 +512,11 @@ module.exports = {
 	completeRun,
 	createRun,
 	ensureSchema,
-	getDataSource,
 	getSessionBinding,
 	insertRunArtifacts,
 	insertRunEvents,
 	listRecentTranscriptEntries,
 	listRunArtifacts,
-	mapRunRow,
-	nowIso,
 	toBindingKey,
 	upsertSessionBinding,
 };

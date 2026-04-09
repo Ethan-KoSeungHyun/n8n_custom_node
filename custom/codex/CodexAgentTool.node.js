@@ -14,6 +14,7 @@ const { executeAgentRun } = require("./runtime/codex-service");
 const {
 	assertSavedMcpServerConfig,
 	buildCodexMcpConfig,
+	buildModelFields,
 	buildSharedOptionFields,
 	describeConfiguredMcpToolsets,
 	getBaseNodeContext,
@@ -119,65 +120,7 @@ class CodexAgentTool {
 				description:
 					"부모 에이전트가 이 tool을 호출할 때 항상 적용할 추가 지침입니다.",
 			},
-			{
-				displayName: "Model Preset",
-				name: "modelPreset",
-				type: "options",
-				default: "",
-				description:
-					"자주 쓰는 Codex/OpenAI 모델 프리셋을 선택합니다. 예전 모델명이나 직접 입력이 필요하면 Custom Override를 사용하세요.",
-				options: [
-					{
-						name: "Default (Environment Default)",
-						value: "",
-					},
-					{
-						name: "GPT-5.4 (Current)",
-						value: "gpt-5.4",
-					},
-					{
-						name: "GPT-5.4 Mini",
-						value: "gpt-5.4-mini",
-					},
-					{
-						name: "GPT-5.3 Codex",
-						value: "gpt-5.3-codex",
-					},
-					{
-						name: "GPT-5.2 Codex",
-						value: "gpt-5.2-codex",
-					},
-					{
-						name: "GPT-5.2",
-						value: "gpt-5.2",
-					},
-					{
-						name: "GPT-5.1 Codex Max",
-						value: "gpt-5.1-codex-max",
-					},
-					{
-						name: "GPT-5.1 Codex Mini",
-						value: "gpt-5.1-codex-mini",
-					},
-					{
-						name: "Custom Override",
-						value: "__custom__",
-					},
-				],
-			},
-			{
-				displayName: "Custom Model",
-				name: "model",
-				type: "string",
-				default: "",
-				description:
-					"Model Preset이 Custom Override일 때만 사용합니다. 예전 워크플로에 직접 저장된 모델명을 유지할 때도 사용됩니다.",
-				displayOptions: {
-					show: {
-						modelPreset: ["__custom__"],
-					},
-				},
-			},
+			...buildModelFields(),
 			{
 				displayName: "Working Directory",
 				name: "workingDirectory",
@@ -341,8 +284,8 @@ function createTool(context, itemIndex, log = true) {
 			if (agentProfileKey) {
 				try {
 					agentProfile = await getAgentByKey(agentProfileKey);
-				} catch {
-					// Registry not available yet — use manual settings
+				} catch (e) {
+					console.warn(`[codex-agent-tool] Registry 프로필 "${agentProfileKey}" 로드 실패 (수동 설정 사용):`, e.message);
 				}
 			}
 

@@ -15,6 +15,55 @@ const {
 	sanitizeProfileKey,
 } = require("./codex-profile-utils");
 
+// ─── Shared UI Constants ──────────────────────────────────────
+
+/**
+ * Codex/OpenAI 모델 프리셋 목록.
+ * CodexAgent, CodexAgentTool에서 동일하게 사용한다.
+ */
+const MODEL_PRESET_OPTIONS = [
+	{ name: "Default (Environment Default)", value: "" },
+	{ name: "GPT-5.4 (Current)", value: "gpt-5.4" },
+	{ name: "GPT-5.4 Mini", value: "gpt-5.4-mini" },
+	{ name: "GPT-5.3 Codex", value: "gpt-5.3-codex" },
+	{ name: "GPT-5.2 Codex", value: "gpt-5.2-codex" },
+	{ name: "GPT-5.2", value: "gpt-5.2" },
+	{ name: "GPT-5.1 Codex Max", value: "gpt-5.1-codex-max" },
+	{ name: "GPT-5.1 Codex Mini", value: "gpt-5.1-codex-mini" },
+	{ name: "Custom Override", value: "__custom__" },
+];
+
+/**
+ * Model Preset + Custom Model 필드 쌍을 반환한다.
+ * CodexAgent, CodexAgentTool의 properties에서 공통으로 사용.
+ */
+function buildModelFields() {
+	return [
+		{
+			displayName: "Model Preset",
+			name: "modelPreset",
+			type: "options",
+			default: "",
+			description:
+				"자주 쓰는 Codex/OpenAI 모델 프리셋을 선택합니다. 예전 모델명이나 직접 입력이 필요하면 Custom Override를 사용하세요.",
+			options: MODEL_PRESET_OPTIONS,
+		},
+		{
+			displayName: "Custom Model",
+			name: "model",
+			type: "string",
+			default: "",
+			description:
+				"Model Preset이 Custom Override일 때만 사용합니다. 예전 워크플로에 직접 저장된 모델명을 유지할 때도 사용됩니다.",
+			displayOptions: {
+				show: {
+					modelPreset: ["__custom__"],
+				},
+			},
+		},
+	];
+}
+
 function coalesce(...values) {
 	for (const value of values) {
 		if (value !== undefined && value !== null && value !== "") {
@@ -647,20 +696,19 @@ function buildSharedOptionFields(overrides = {}) {
 }
 
 module.exports = {
+	MODEL_PRESET_OPTIONS,
 	buildCodexMcpConfig,
+	buildModelFields,
 	buildSharedOptionFields,
 	describeConfiguredMcpToolsets,
-	coerceBoolean,
 	getBaseNodeContext,
 	getConnectedCodexMemory,
 	getConnectedCodexToolsets,
 	assertSavedMcpServerConfig,
 	parseDelimitedPaths,
-	parseJsonObjectOrEmpty,
 	readCommonOptions,
 	resolveModelField,
 	resolvePromptValue,
 	resolveSessionIdField,
-	stringifyObjectValues,
 	toConnectionArray,
 };

@@ -9,13 +9,13 @@ const {
 	extractArtifactsFromEvents,
 	normalizeEvents,
 } = require("../observability/codex-observability");
+const { nowIso } = require("../store/codex-store-utils");
 const {
 	completeRun,
 	createRun,
 	insertRunArtifacts,
 	insertRunEvents,
 	listRecentTranscriptEntries,
-	nowIso,
 	toBindingKey,
 	upsertSessionBinding,
 	getSessionBinding,
@@ -291,8 +291,8 @@ async function executeAgentRun(request) {
 					request.agentKey,
 				);
 				effectiveSystemInstructions += delegationCtx + sharedCtx;
-			} catch {
-				// Orchestration context failure should not block execution
+			} catch (e) {
+				console.warn("[codex-service] Orchestration context 로드 실패 (실행은 계속):", e.message);
 			}
 		}
 
@@ -377,16 +377,16 @@ async function executeAgentRun(request) {
 		) {
 			try {
 				await autoExtractAndSaveMemories(request, result);
-			} catch {
-				// Memory save failure should not block the main response
+			} catch (e) {
+				console.warn("[codex-service] 메모리 자동 저장 실패 (실행은 계속):", e.message);
 			}
 		}
 
 		// Post-completion lifecycle hook
 		try {
 			await lifecycle.postAgentComplete(request, result);
-		} catch {
-			// Hook failure should not block main response
+		} catch (e) {
+			console.warn("[codex-service] postAgentComplete hook 실패 (실행은 계속):", e.message);
 		}
 
 		// Send result message if part of an orchestration
@@ -405,8 +405,8 @@ async function executeAgentRun(request) {
 					},
 					status: "pending",
 				});
-			} catch {
-				// Message send failure should not block main response
+			} catch (e) {
+				console.warn("[codex-service] 오케스트레이션 메시지 전송 실패 (실행은 계속):", e.message);
 			}
 		}
 
@@ -434,8 +434,8 @@ async function executeAgentRun(request) {
 
 		try {
 			await lifecycle.onError(request, error);
-		} catch {
-			// Hook failure should not block error handling
+		} catch (e) {
+			console.warn("[codex-service] onError hook 실패:", e.message);
 		}
 
 		const endedAt = nowIso();

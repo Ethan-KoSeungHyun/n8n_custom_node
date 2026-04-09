@@ -193,7 +193,8 @@ class CodexMemory {
 			try {
 				persistentMemory = await queryMemories(filters);
 				memoryPromptSection = await buildMemoryPromptSection(filters);
-			} catch {
+			} catch (e) {
+				console.warn("[codex-memory] Persistent memory 조회 실패 (빈 메모리로 계속):", e.message);
 				persistentMemory = [];
 				memoryPromptSection = "";
 			}

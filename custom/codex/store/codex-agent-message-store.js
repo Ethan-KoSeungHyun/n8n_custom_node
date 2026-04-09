@@ -1,51 +1,18 @@
 "use strict";
 
-const crypto = require("node:crypto");
-const { Container } = require("@n8n/di");
-const { DataSource } = require("@n8n/typeorm");
+const {
+	nowIso,
+	createId,
+	jsonStringify,
+	jsonParse,
+	getDataSource,
+	getDriverKind,
+	ph,
+} = require("./codex-store-utils");
 
 const TABLE = "codex_agent_messages";
 
 let schemaReady;
-
-function nowIso() {
-	return new Date().toISOString();
-}
-
-function createId() {
-	return crypto.randomUUID();
-}
-
-function jsonStringify(value) {
-	if (value === undefined) return null;
-	return JSON.stringify(value);
-}
-
-function jsonParse(value, fallback = null) {
-	if (!value) return fallback;
-	try {
-		return JSON.parse(value);
-	} catch {
-		return fallback;
-	}
-}
-
-function getDataSource() {
-	const ds = Container.get(DataSource);
-	if (!ds || !ds.isInitialized) {
-		throw new Error("n8n DataSource is not available.");
-	}
-	return ds;
-}
-
-function getDriverKind(ds) {
-	const type = String(ds.options?.type || "").toLowerCase();
-	return type.includes("postgres") ? "postgres" : "sqlite";
-}
-
-function ph(dk, i) {
-	return dk === "postgres" ? `$${i}` : "?";
-}
 
 function mapRow(row) {
 	if (!row) return null;

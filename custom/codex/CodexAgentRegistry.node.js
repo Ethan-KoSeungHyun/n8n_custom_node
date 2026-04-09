@@ -280,8 +280,8 @@ class CodexAgentRegistry {
 				}
 
 				const outputItems = Array.isArray(result)
-					? result.map((r) => ({ json: r }))
-					: [{ json: result || {} }];
+					? result.map((r) => ({ json: r, pairedItem: { item: i } }))
+					: [{ json: result || {}, pairedItem: { item: i } }];
 				returnData.push(...outputItems);
 			} catch (error) {
 				if (this.continueOnFail()) {
