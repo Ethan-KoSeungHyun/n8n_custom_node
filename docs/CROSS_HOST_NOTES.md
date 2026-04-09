@@ -41,3 +41,70 @@ Windows 호스트에서 다음을 확인해 주세요:
 - Node.js 버전은 20.x 이상인지?
 
 ---
+
+## 2026-04-10 macOS → Windows (추가)
+
+### 리팩터링 상세 — Windows에서 꼭 확인해야 할 것들
+
+이번 3개 커밋(`23d2a97`, `2f1a255`, `a1f7b96`)에서 구조적 변경이 많았습니다.
+단순 "돌아가는지" 외에 아래 항목을 구체적으로 확인 부탁합니다.
+
+#### 1. `codex-store-utils.js` 모듈 해석
+4개 store 파일이 전부 `require("./codex-store-utils")`를 사용합니다. Windows에서 상대 경로 해석이 정상인지:
+```powershell
+cd D:\Project\N8N_SERVER\n8n_custom_node
+node -e "require('./custom/codex/store/codex-store-utils')"
+```
+에러 없이 끝나면 OK.
+
+#### 2. Codex CLI `.cmd` 경로 처리
+`sdk-runtime.js`에서 `.cmd`/`.bat` 래퍼 경로를 감지하면 SDK가 직접 경로를 해석하도록 변경했습니다.
+- credential에 `C:\...\codex.cmd`를 설정한 경우: 개발 모드(`DEBUG=1`)에서 경고 로그가 나오는지?
+- credential에 경로를 비워둔 경우 (PATH에 codex 있을 때): 정상 실행되는지?
+- 어느 방식이 Windows에서 더 안정적인지 알려주세요.
+
+#### 3. `observability/codex-observability.js` git spawn
+Windows에서 `spawnSync("git", ...)` 호출 시 `shell: true`가 필요한데, 이번에 추가했습니다:
+```js
+const isWindows = process.platform === "win32";
+spawnSync("git", args, { shell: isWindows, ... });
+```
+Agent 실행 후 `codex_run_artifacts`에 `kind='git_diff'` 레코드가 생성되는지 확인해 주세요.
+
+#### 4. MCP config key 버그 수정
+`CodexAgentTool.node.js`에서 `mcpServers` (camelCase) → `mcp_servers` (snake_case)로 수정했습니다.
+이전에 AgentTool에 MCP Toolset을 연결해서 사용했다면, 이제야 제대로 동작할 겁니다.
+MCP를 사용 중이었다면 수정 전후 차이를 알려주세요.
+
+#### 5. 검증 스크립트 실행
+```powershell
+cd D:\Project\N8N_SERVER\n8n_custom_node
+npm run verify
+```
+44/44 통과하는지, 혹시 Windows 특유의 경로 문제로 실패하는 항목이 있는지?
+
+#### 6. 신규 DB 테이블
+이번에 추가된 테이블 3개: `codex_agent_memories`, `codex_agent_registry`, `codex_agent_messages`
+n8n 재시작 후 Codex Agent 1회 실행하면 자동 생성됩니다.
+```sql
+-- sqlite3 D:\Project\N8N_SERVER\data\.n8n\database.sqlite
+.tables
+```
+기존 4개(`codex_runs`, `codex_run_events`, `codex_session_bindings`, `codex_run_artifacts`) + 신규 3개 = 총 7개 확인.
+
+### 추가 질문
+
+- `npm install`을 `n8n_custom_node`에서 마지막으로 실행한 게 언제인지? (`@openai/codex-sdk` 0.117.0이 설치되어 있어야 합니다)
+- Windows에서 n8n 시작 방식이 어떻게 되는지? (예: `npx n8n start`, PM2, 서비스 등)
+- 현재 Windows에서 `codex_runs` 테이블에 기록이 있는지? (이전에 Agent를 실행한 적이 있는지)
+
+### 응답 방법
+
+이 파일에 아래 형식으로 추가하고 commit + push 해주세요:
+```
+## 2026-04-XX Windows → macOS
+### 확인 결과
+(내용)
+```
+
+---
