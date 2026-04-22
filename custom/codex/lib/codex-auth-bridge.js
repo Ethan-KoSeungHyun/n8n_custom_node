@@ -879,254 +879,473 @@ function renderAuthorizePage(session) {
 	<title>Codex ChatGPT 계정 연결</title>
 	<style>
 		:root {
-			font-family: "Segoe UI", "Apple SD Gothic Neo", Arial, sans-serif;
-			color-scheme: light;
-			--bg: #f5f7fa;
-			--panel: #ffffff;
-			--text: #17191c;
-			--muted: #6b7280;
-			--border: #e5e7eb;
-			--accent: #111827;
-			--accentHover: #374151;
-			--accentText: #ffffff;
-			--danger: #dc2626;
-			--dangerHover: #b91c1c;
-			--warn: #92400e;
-			--warnBg: #fffbeb;
-			--warnBorder: #fcd34d;
-			--ok: #065f46;
-			--okBg: #ecfdf5;
-			--okBorder: #6ee7b7;
-			--info: #1e40af;
-			--infoBg: #eff6ff;
-			--infoBorder: #93c5fd;
+			--bg: #18181b;
+			--surface: #ffffff;
+			--surface-2: #fafafa;
+			--surface-3: #f4f4f5;
+			--border: #e4e4e7;
+			--border-2: #d4d4d8;
+			--ink: #09090b;
+			--muted: #71717a;
+			--muted-2: #a1a1aa;
+			--accent: #18181b;
+			--accent-fg: #ffffff;
+			--ok: #15803d;
+			--ok-bg: #f0fdf4;
+			--err: #b91c1c;
+			--err-bg: #fef2f2;
+			--err-border: #fecaca;
 		}
 		* { box-sizing: border-box; }
+		html, body { margin: 0; color: var(--ink); }
 		body {
-			margin: 0;
-			padding: 32px 24px;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+			-webkit-font-smoothing: antialiased;
+			-moz-osx-font-smoothing: grayscale;
+			letter-spacing: -0.005em;
 			min-height: 100vh;
 			background: var(--bg);
-			color: var(--text);
+			background-image: radial-gradient(ellipse at top, #27272a, #0b0c0e 70%);
+			padding: 36px 28px;
 			display: flex;
 			align-items: flex-start;
 			justify-content: center;
 		}
+
+		/* card */
 		.card {
 			width: 100%;
-			max-width: 560px;
-			background: var(--panel);
+			max-width: 440px;
+			background: var(--surface);
 			border: 1px solid var(--border);
-			border-radius: 16px;
-			box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+			border-radius: 12px;
+			box-shadow: 0 0 0 1px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.06), 0 8px 24px -8px rgba(0,0,0,0.22);
 			overflow: hidden;
 		}
-		.card-header {
-			padding: 20px 24px 16px;
+		.card-head {
+			padding: 18px 20px 14px;
 			border-bottom: 1px solid var(--border);
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 12px;
 		}
-		.card-header h1 {
-			margin: 0 0 4px;
-			font-size: 17px;
-			font-weight: 700;
-			letter-spacing: -0.01em;
+		.card-head h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+		.card-head p { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); font-weight: 400; line-height: 1.5; }
+		.card-body { padding: 16px 20px 18px; }
+		.head-left { display: flex; gap: 10px; align-items: flex-start; }
+		.brand {
+			width: 24px; height: 24px;
+			border-radius: 6px;
+			background: var(--ink);
+			color: #fff;
+			display: inline-flex; align-items: center; justify-content: center;
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+			font-weight: 600;
+			font-size: 12px;
+			flex-shrink: 0;
 		}
-		.card-header p {
-			margin: 0;
-			font-size: 13px;
+
+		/* status */
+		.status {
+			display: flex; align-items: center; gap: 12px;
+			padding: 12px 14px;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			background: var(--surface-2);
+		}
+		.indicator {
+			width: 8px; height: 8px; border-radius: 50%;
+			flex-shrink: 0;
+			background: var(--muted-2);
+			position: relative;
+		}
+		.indicator.ok { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
+		.indicator.pend { background: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.18); }
+		.indicator.pend::after {
+			content: ''; position: absolute; inset: -6px; border-radius: 50%;
+			border: 1px solid #3b82f6; opacity: 0.4;
+			animation: ping 1.6s cubic-bezier(0,0,0.2,1) infinite;
+		}
+		.indicator.warn { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+		.indicator.err { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.18); }
+		@keyframes ping {
+			0% { transform: scale(0.6); opacity: 0.6; }
+			80% { transform: scale(1.4); opacity: 0; }
+			100% { opacity: 0; }
+		}
+		.st-text { flex: 1; min-width: 0; }
+		.st-label { font-size: 13.5px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+		.st-sub {
+			font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.45;
+			overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		}
+
+		/* info grid */
+		.info {
+			margin-top: 14px;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			overflow: hidden;
+		}
+		.info-row {
+			display: grid; grid-template-columns: 120px 1fr;
+			padding: 10px 14px;
+			font-size: 12.5px;
+			align-items: center;
+		}
+		.info-row + .info-row { border-top: 1px solid var(--border); }
+		.info-row .k {
+			color: var(--muted); font-size: 11px; font-weight: 500;
+			letter-spacing: 0.02em; text-transform: uppercase;
+			font-feature-settings: 'tnum';
+		}
+		.info-row .v { color: var(--ink); font-weight: 500; word-break: break-all; }
+		.info-row .v.mono {
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+			font-size: 11.5px; font-weight: 400; color: var(--muted); letter-spacing: 0;
+		}
+
+		/* device */
+		.device {
+			margin-top: 14px;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			padding: 14px;
+			background: var(--surface-2);
+		}
+		.device-label {
+			font-size: 10.5px; color: var(--muted);
+			text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+			margin-bottom: 8px;
+			display: flex; justify-content: space-between; align-items: center; gap: 8px;
+		}
+		.device-url-ref {
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+			font-size: 10.5px; color: var(--muted); text-transform: none;
+			letter-spacing: 0; font-weight: 400;
+			overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;
+		}
+		.code {
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+			font-size: 26px; font-weight: 600; letter-spacing: 0.1em;
+			color: var(--ink);
+			text-align: center;
+			padding: 10px 8px;
+			background: #fff;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			user-select: all;
+		}
+		.device-actions { display: flex; gap: 8px; margin-top: 10px; }
+		.device-actions .btn { flex: 1; justify-content: center; }
+		.progress {
+			margin-top: 10px;
+			height: 2px;
+			background: var(--border);
+			border-radius: 999px;
+			overflow: hidden;
+			position: relative;
+		}
+		.progress::after {
+			content: ''; position: absolute; inset: 0;
+			background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+			width: 40%;
+			animation: slide 1.8s ease-in-out infinite;
+		}
+		@keyframes slide {
+			0% { transform: translateX(-100%); }
+			100% { transform: translateX(350%); }
+		}
+		.progress-label {
+			margin-top: 8px;
+			font-size: 11.5px;
 			color: var(--muted);
+			text-align: center;
+		}
+
+		/* buttons */
+		.actions { margin-top: 14px; display: flex; gap: 8px; }
+		.btn {
+			display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+			font-family: inherit;
+			font-size: 13px; font-weight: 500;
+			letter-spacing: -0.005em;
+			padding: 9px 14px;
+			border-radius: 8px;
+			border: 1px solid var(--border-2);
+			background: #fff;
+			color: var(--ink);
+			cursor: pointer;
+			transition: background 120ms, border-color 120ms, transform 120ms;
+			text-decoration: none;
+			line-height: 1;
+			white-space: nowrap;
+		}
+		.btn:hover:not(:disabled) { background: var(--surface-3); border-color: var(--muted-2); }
+		.btn:active:not(:disabled) { transform: translateY(0.5px); }
+		.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+		.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+		.btn.primary:hover:not(:disabled) { background: #27272a; border-color: #27272a; }
+		.btn.wide { flex: 1; }
+		.btn.sm { padding: 7px 10px; font-size: 12px; }
+		.btn svg { flex-shrink: 0; }
+
+		/* kebab */
+		.kebab-wrap { position: relative; }
+		.kebab {
+			width: 28px; height: 28px;
+			border-radius: 6px;
+			border: 1px solid transparent;
+			background: transparent;
+			color: var(--muted);
+			cursor: pointer;
+			display: inline-flex; align-items: center; justify-content: center;
+			transition: background 120ms, border-color 120ms;
+		}
+		.kebab:hover { background: var(--surface-3); border-color: var(--border); color: var(--ink); }
+		.kebab svg { width: 16px; height: 16px; }
+		.menu-pop {
+			position: absolute; right: 0; top: calc(100% + 4px);
+			min-width: 220px;
+			background: #fff;
+			border: 1px solid var(--border);
+			border-radius: 10px;
+			box-shadow: 0 4px 12px -2px rgba(0,0,0,0.08), 0 2px 4px -1px rgba(0,0,0,0.06);
+			padding: 4px;
+			z-index: 5;
+			font-size: 12.5px;
+			display: none;
+		}
+		.menu-pop.open { display: block; }
+		.menu-item {
+			display: flex; align-items: center; justify-content: space-between; gap: 10px;
+			padding: 7px 10px;
+			border-radius: 6px;
+			cursor: pointer;
+			color: var(--ink);
+			border: none;
+			background: transparent;
+			width: 100%;
+			font-family: inherit;
+			font-size: 12.5px;
+			text-align: left;
+		}
+		.menu-item:hover:not(:disabled) { background: var(--surface-3); }
+		.menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+		.menu-item.danger { color: var(--err); }
+		.menu-item.danger:hover:not(:disabled) { background: var(--err-bg); }
+		.mi-tag {
+			font-size: 10px;
+			color: var(--muted);
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+			letter-spacing: 0.04em;
+		}
+		.menu-divider { height: 1px; background: var(--border); margin: 4px 2px; }
+
+		/* inline error */
+		.inline-err {
+			margin-top: 12px;
+			padding: 10px 12px;
+			background: var(--err-bg);
+			border: 1px solid var(--err-border);
+			border-radius: 8px;
+			font-size: 12.5px;
+			color: var(--err);
 			line-height: 1.5;
 		}
-		.card-body { padding: 20px 24px; }
-		/* 상태 배너 */
-		.status-banner {
+		.inline-err .t { font-weight: 600; margin-bottom: 2px; }
+
+		/* reset confirm */
+		.reset-confirm {
+			margin-top: 12px;
+			padding: 12px 14px;
+			background: var(--err-bg);
+			border: 1px solid var(--err-border);
+			border-radius: 10px;
+			font-size: 13px;
+		}
+		.reset-confirm .rc-title { font-weight: 600; color: var(--err); margin-bottom: 8px; }
+		.reset-confirm .rc-msg { color: #7f1d1d; margin-bottom: 10px; line-height: 1.5; }
+		.reset-confirm .rc-actions { display: flex; gap: 8px; }
+		.reset-confirm .btn.primary { background: var(--err); border-color: var(--err); color: #fff; }
+		.reset-confirm .btn.primary:hover:not(:disabled) { background: #991b1b; border-color: #991b1b; }
+
+		/* hint */
+		.hint {
+			font-size: 11.5px;
+			color: var(--muted);
+			text-align: center;
+			margin-top: 10px;
+			line-height: 1.5;
+		}
+
+		/* logs */
+		details.logs {
+			margin-top: 14px;
+			border-top: 1px solid var(--border);
+			padding-top: 12px;
+		}
+		details.logs summary {
+			cursor: pointer;
+			font-size: 11.5px;
+			color: var(--muted);
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+			list-style: none;
 			display: flex;
 			align-items: center;
-			gap: 10px;
-			padding: 12px 16px;
-			border-radius: 10px;
-			border: 1px solid var(--border);
-			margin-bottom: 16px;
-			font-size: 14px;
-			font-weight: 600;
+			gap: 4px;
+			letter-spacing: 0.02em;
 		}
-		.status-banner.connected { background: var(--okBg); border-color: var(--okBorder); color: var(--ok); }
-		.status-banner.needs_reconnect, .status-banner.error { background: var(--warnBg); border-color: var(--warnBorder); color: var(--warn); }
-		.status-banner.disconnected { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
-		.status-banner.pending, .status-banner.idle { background: var(--infoBg); border-color: var(--infoBorder); color: var(--info); }
-		.status-icon { font-size: 16px; flex-shrink: 0; }
-		.status-text-wrap { flex: 1; min-width: 0; }
-		.status-label { font-weight: 700; }
-		.status-sub { font-size: 12px; font-weight: 400; opacity: 0.85; margin-top: 1px; }
-		/* 계정 정보 */
-		.account-info {
-			background: #f9fafb;
-			border: 1px solid var(--border);
-			border-radius: 10px;
-			padding: 12px 16px;
-			margin-bottom: 16px;
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px 16px;
-			font-size: 13px;
+		details.logs summary::-webkit-details-marker { display: none; }
+		details.logs summary::before {
+			content: '▸';
+			font-family: sans-serif;
+			font-size: 9px;
+			transition: transform 120ms;
 		}
-		.info-row { display: flex; flex-direction: column; gap: 2px; }
-		.info-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-		.info-value { font-weight: 500; color: var(--text); word-break: break-all; }
-		/* Device Code 박스 */
-		.device-box {
-			background: var(--infoBg);
-			border: 1px solid var(--infoBorder);
-			border-radius: 10px;
-			padding: 14px 16px;
-			margin-bottom: 16px;
-			font-size: 13px;
-		}
-		.device-box .code {
-			font-family: "Consolas", "Courier New", monospace;
-			font-size: 22px;
-			font-weight: 800;
-			letter-spacing: 0.1em;
-			color: var(--info);
-			margin: 8px 0 4px;
-		}
-		.device-box a { color: var(--info); font-weight: 600; }
-		/* 버튼 */
-		.btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-		.btn {
-			display: inline-flex; align-items: center; gap: 6px;
-			border-radius: 8px; padding: 9px 16px;
-			font-size: 14px; font-weight: 600; cursor: pointer;
-			border: 1px solid transparent; transition: background 0.15s, opacity 0.15s;
-			line-height: 1;
-		}
-		.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-		.btn-primary:hover:not(:disabled) { background: var(--accentHover); border-color: var(--accentHover); }
-		.btn-secondary { background: #fff; color: var(--accent); border-color: var(--border); }
-		.btn-secondary:hover:not(:disabled) { background: #f9fafb; }
-		.btn-admin { color: var(--muted); border-color: #d1d5db; font-size: 12px; }
-		.btn-admin:hover:not(:disabled) { background: #f3f4f6; color: var(--text); }
-		.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
-		.btn-danger:hover:not(:disabled) { background: var(--dangerHover); border-color: var(--dangerHover); }
-		.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-		.btn-sm { padding: 7px 12px; font-size: 12px; }
-		/* 로그 */
-		.log-toggle {
-			font-size: 12px; color: var(--muted); background: none; border: none;
-			cursor: pointer; padding: 0; text-decoration: underline; margin-bottom: 8px;
-		}
-		.log-toggle:hover { color: var(--text); }
-		pre#logOutput {
-			display: none;
-			margin: 0;
-			padding: 12px;
+		details[open].logs summary::before { transform: rotate(90deg); }
+		details.logs pre {
+			margin: 10px 0 0;
+			background: #0b0c0e;
+			color: #a1a1aa;
 			border-radius: 8px;
-			background: #1f2937;
-			color: #d1d5db;
-			font-size: 11.5px;
+			padding: 10px 12px;
+			font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+			font-size: 11px;
 			line-height: 1.55;
+			max-height: 180px;
+			overflow: auto;
 			white-space: pre-wrap;
 			word-break: break-word;
-			max-height: 240px;
-			overflow: auto;
 		}
-		pre#logOutput.visible { display: block; }
-		/* 닫기 성공 화면 */
+
+		/* close screen */
 		.close-screen {
 			display: none;
 			flex-direction: column;
 			align-items: center;
 			text-align: center;
-			padding: 32px 24px;
+			padding: 40px 24px;
 			gap: 12px;
 		}
 		.close-screen.visible { display: flex; }
-		.close-icon { font-size: 48px; }
-		.close-title { font-size: 18px; font-weight: 700; }
-		.close-sub { font-size: 14px; color: var(--muted); }
-		.main-content { }
+		.close-icon {
+			width: 44px; height: 44px;
+			border-radius: 50%;
+			background: var(--ok-bg);
+			color: var(--ok);
+			display: flex; align-items: center; justify-content: center;
+		}
+		.close-icon svg { width: 24px; height: 24px; }
+		.close-title { font-size: 16px; font-weight: 600; color: var(--ink); margin-top: 4px; }
+		.close-sub { font-size: 13px; color: var(--muted); }
+
+		.hidden { display: none !important; }
 	</style>
 </head>
 <body>
 	<div class="card">
 		<!-- 닫기 완료 화면 (disconnect/purge 후 표시) -->
 		<div id="closeScreen" class="close-screen">
-			<div class="close-icon">✅</div>
+			<div class="close-icon">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<polyline points="20 6 9 17 4 12"></polyline>
+				</svg>
+			</div>
 			<div class="close-title" id="closeTitle">완료</div>
 			<div class="close-sub" id="closeSub">이 창을 닫아도 됩니다.</div>
 		</div>
 
 		<!-- 메인 UI -->
 		<div id="mainContent">
-			<div class="card-header">
-				<h1>Codex ChatGPT 계정 연결</h1>
-				<p id="headerDesc">ChatGPT 계정으로 이 credential을 연결합니다.</p>
+			<div class="card-head">
+				<div class="head-left">
+					<div class="brand">C</div>
+					<div>
+						<h1>ChatGPT account</h1>
+						<p>Codex credential · 이 credential에 연결된 계정</p>
+					</div>
+				</div>
+				<div class="kebab-wrap" id="kebabWrap">
+					<button class="kebab" id="kebabBtn" type="button" aria-label="더보기" onclick="toggleKebab(event)">
+						<svg viewBox="0 0 16 16" fill="currentColor">
+							<circle cx="8" cy="3" r="1.3"></circle>
+							<circle cx="8" cy="8" r="1.3"></circle>
+							<circle cx="8" cy="13" r="1.3"></circle>
+						</svg>
+					</button>
+					<div class="menu-pop" id="menuPop" role="menu"></div>
+				</div>
 			</div>
+
 			<div class="card-body">
-				<!-- 상태 배너 -->
-				<div id="statusBanner" class="status-banner idle">
-					<span class="status-icon" id="statusIcon">⟳</span>
-					<div class="status-text-wrap">
-						<div class="status-label" id="statusLabel">확인 중...</div>
-						<div class="status-sub" id="statusSub"></div>
+				<div class="status">
+					<span class="indicator" id="statusIndicator"></span>
+					<div class="st-text">
+						<div class="st-label" id="statusLabel">확인 중...</div>
+						<div class="st-sub" id="statusSub"></div>
 					</div>
 				</div>
 
-				<!-- 계정 정보 (연결됨 or needs_reconnect 때만 표시) -->
-				<div id="accountInfo" class="account-info" style="display:none">
-					<div class="info-row">
-						<span class="info-label">계정</span>
-						<span class="info-value" id="infoEmail">-</span>
+				<div class="info hidden" id="accountInfo">
+					<div class="info-row"><span class="k">Account</span><span class="v" id="infoEmail">-</span></div>
+					<div class="info-row"><span class="k">Workspace</span><span class="v" id="infoWorkspace">-</span></div>
+					<div class="info-row"><span class="k">Last sign-in</span><span class="v" id="infoLastLogin">-</span></div>
+					<div class="info-row"><span class="k">Profile key</span><span class="v mono" id="infoProfileKey">-</span></div>
+				</div>
+
+				<div class="device hidden" id="deviceBox">
+					<div class="device-label">
+						<span>One-time code</span>
+						<span class="device-url-ref" id="deviceUrlRef">-</span>
 					</div>
-					<div class="info-row">
-						<span class="info-label">워크스페이스</span>
-						<span class="info-value" id="infoWorkspace">-</span>
+					<div class="code" id="deviceCode">------</div>
+					<div class="device-actions">
+						<button class="btn sm" id="btnCopy" type="button" onclick="copyCode()">
+							<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="5" y="5" width="8" height="8" rx="1.5"></rect>
+								<path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H4.5A1.5 1.5 0 0 0 3 3.5v6A1.5 1.5 0 0 0 4.5 11H5"></path>
+							</svg>
+							<span id="btnCopyLabel">코드 복사</span>
+						</button>
+						<a class="btn sm primary" id="btnOpenUrl" href="#" target="_blank" rel="noreferrer">
+							<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M9 3h4v4"></path>
+								<path d="M13 3L7 9"></path>
+								<path d="M11 10v3H3V5h3"></path>
+							</svg>
+							인증 페이지 열기
+						</a>
 					</div>
-					<div class="info-row">
-						<span class="info-label">마지막 로그인</span>
-						<span class="info-value" id="infoLastLogin">-</span>
-					</div>
-					<div class="info-row">
-						<span class="info-label">프로필 키</span>
-						<span class="info-value" id="infoProfileKey" style="font-size:11px;color:#6b7280">${escapeHtml(session.profileKey || "-")}</span>
+					<div class="progress"></div>
+					<div class="progress-label" id="progressLabel">브라우저에서 로그인을 기다리는 중…</div>
+				</div>
+
+				<div class="actions hidden" id="primaryActions">
+					<button class="btn wide" id="primaryBtn" type="button" onclick="onPrimaryClick()">-</button>
+				</div>
+
+				<div class="hint hidden" id="hintText"></div>
+
+				<div class="inline-err hidden" id="inlineErr">
+					<div class="t">로그인 실패</div>
+					<div id="errMsg">다시 시도하거나 인증 캐시를 초기화해 보세요.</div>
+				</div>
+
+				<div class="reset-confirm hidden" id="resetConfirm">
+					<div class="rc-title">인증을 완전히 초기화합니다.</div>
+					<div class="rc-msg">로그아웃되며 저장된 토큰이 삭제됩니다. 계속하시겠습니까?</div>
+					<div class="rc-actions">
+						<button class="btn primary sm" type="button" onclick="doReset()">초기화 확인</button>
+						<button class="btn sm" type="button" onclick="hideResetConfirm()">취소</button>
 					</div>
 				</div>
 
-				<!-- Device Code 정보 박스 -->
-				<div id="deviceBox" class="device-box" style="display:none">
-					<div style="font-weight:600;margin-bottom:4px;">🔐 Device Code 로그인</div>
-					<div>아래 URL을 어느 기기에서든 열어 코드를 입력하세요.</div>
-					<div class="code" id="deviceCode"></div>
-					<div><a id="deviceUrl" href="#" target="_blank" rel="noreferrer">인증 페이지 열기 →</a></div>
-				</div>
-
-				<!-- 버튼 그룹: 연결된 상태 -->
-				<div id="btnGroupConnected" class="btn-group" style="display:none">
-					<button class="btn btn-primary" id="btnRelogin" onclick="runAction('device')">↺ 재로그인 (Device Code)</button>
-					<button class="btn btn-secondary" id="btnRefreshConn" onclick="runAction('refresh')">상태 확인</button>
-					<button class="btn btn-danger btn-sm" id="btnReset" onclick="showResetConfirm()">초기화</button>
-				</div>
-
-				<!-- 초기화 인라인 확인 -->
-				<div id="resetConfirm" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;">
-					<div style="font-weight:600;color:#991b1b;margin-bottom:8px;">⚠ 인증을 완전히 초기화합니다.</div>
-					<div style="color:#7f1d1d;margin-bottom:10px;">로그아웃되며 저장된 토큰이 삭제됩니다. 계속하시겠습니까?</div>
-					<div style="display:flex;gap:8px;">
-						<button class="btn btn-danger btn-sm" onclick="doReset()">초기화 확인</button>
-						<button class="btn btn-secondary btn-sm" onclick="hideResetConfirm()">취소</button>
-					</div>
-				</div>
-
-				<!-- 버튼 그룹: 연결 안 된 상태 -->
-				<div id="btnGroupDisconnected" class="btn-group" style="display:none">
-					<button class="btn btn-primary" id="btnDevice" onclick="runAction('device')">🔑 Device Code 로그인</button>
-					<button class="btn btn-secondary btn-admin" id="btnBrowser" onclick="runAction('browser')" title="서버 머신에서 직접 브라우저를 열어 로그인합니다. 서버에 직접 접근 가능한 관리자만 사용하세요.">🖥 서버 브라우저 로그인 <span style="font-size:10px;opacity:0.75;">(관리자)</span></button>
-					<button class="btn btn-secondary" id="btnRefreshDisc" onclick="runAction('refresh')">상태 확인</button>
-				</div>
-
-				<!-- 로그 토글 -->
-				<button class="log-toggle" onclick="toggleLog()">▸ 상세 로그 보기</button>
-				<pre id="logOutput">업데이트를 기다리는 중...</pre>
+				<details class="logs" id="logsDetails">
+					<summary>Activity log</summary>
+					<pre id="logOutput">업데이트를 기다리는 중...</pre>
+				</details>
 			</div>
 		</div>
 	</div>
@@ -1134,47 +1353,112 @@ function renderAuthorizePage(session) {
 		const state = ${JSON.stringify(session.state)};
 		let redirecting = false;
 		let busy = false;
-		let logVisible = false;
 		const initialState = ${JSON.stringify(sessionToClient(session))};
 
-		const ALL_BTNS = ['btnRelogin','btnRefreshConn','btnReset','btnBrowser','btnDevice','btnRefreshDisc'];
-
-		function setBusy(nextBusy) {
-			busy = nextBusy;
-			for (const id of ALL_BTNS) {
-				const el = document.getElementById(id);
-				if (el) el.disabled = nextBusy;
-			}
-		}
-
-		function toggleLog() {
-			logVisible = !logVisible;
-			const log = document.getElementById('logOutput');
-			const btn = document.querySelector('.log-toggle');
-			log.classList.toggle('visible', logVisible);
-			btn.textContent = logVisible ? '▾ 상세 로그 숨기기' : '▸ 상세 로그 보기';
-		}
-
-		function fv(v, fallback = '-') {
+		function fv(v, fallback) {
+			if (fallback === undefined) fallback = '-';
 			return v && String(v).trim() ? String(v).trim() : fallback;
 		}
 
 		function statusConfig(status) {
 			const map = {
-				connected:       { icon: '✓', label: '연결됨',       sub: 'Codex 계정이 정상 연결되어 있습니다.', cls: 'connected' },
-				needs_reconnect: { icon: '⚠', label: '재연결 필요',  sub: '저장된 인증 정보가 있지만 재확인이 필요합니다.', cls: 'needs_reconnect' },
-				disconnected:    { icon: '✕', label: '연결 안 됨',   sub: 'ChatGPT 계정을 연결해 주세요.', cls: 'disconnected' },
-				pending:         { icon: '⟳', label: '로그인 진행 중…', sub: '완료될 때까지 기다려 주세요.', cls: 'pending' },
-				idle:            { icon: '○', label: '대기 중',       sub: '로그인 방식을 선택하세요.', cls: 'idle' },
-				error:           { icon: '✕', label: '오류 발생',     sub: '로그인에 실패했습니다. 다시 시도해 주세요.', cls: 'error' },
+				connected:       { tone: 'ok',   label: 'Connected',      sub: 'Codex 계정이 정상 연결되어 있습니다.' },
+				needs_reconnect: { tone: 'warn', label: '재연결 필요',     sub: '저장된 인증 정보 재확인이 필요합니다.' },
+				pending:         { tone: 'pend', label: '로그인 대기 중',   sub: '브라우저에서 승인을 기다리는 중입니다.' },
+				disconnected:    { tone: '',     label: 'Not connected',  sub: 'ChatGPT 계정을 연결해 주세요.' },
+				idle:            { tone: '',     label: '대기 중',         sub: '로그인 방식을 선택하세요.' },
+				error:           { tone: 'err',  label: 'Sign-in failed', sub: '로그인에 실패했습니다.' },
 			};
-			return map[status] || { icon: '○', label: status || '알 수 없음', sub: '', cls: 'idle' };
+			return map[status] || { tone: '', label: status || 'Unknown', sub: '' };
+		}
+
+		function toggleKebab(ev) {
+			if (ev) ev.stopPropagation();
+			document.getElementById('menuPop').classList.toggle('open');
+		}
+		function closeKebab() {
+			document.getElementById('menuPop').classList.remove('open');
+		}
+		document.addEventListener('click', function(ev) {
+			const wrap = document.getElementById('kebabWrap');
+			if (wrap && !wrap.contains(ev.target)) closeKebab();
+		});
+
+		function buildKebabMenu(status, isRunning) {
+			const isConnected = (status === 'connected' || status === 'needs_reconnect');
+			const items = [];
+			if (isConnected) {
+				items.push({ label: '다른 계정으로 재로그인', tag: 'device', action: 'device' });
+				items.push({ label: '상태 새로고침',         tag: '↻',      action: 'refresh' });
+				items.push({ divider: true });
+				items.push({ label: '연결 해제', danger: true, action: 'disconnect' });
+				items.push({ label: '인증 캐시 초기화', danger: true, action: 'reset' });
+			} else {
+				items.push({ label: '서버 브라우저 로그인', tag: 'admin', action: 'browser' });
+				items.push({ label: '상태 새로고침',       tag: '↻',     action: 'refresh' });
+				items.push({ divider: true });
+				items.push({ label: '인증 캐시 초기화', danger: true, action: 'reset' });
+			}
+			const pop = document.getElementById('menuPop');
+			pop.innerHTML = '';
+			for (const it of items) {
+				if (it.divider) {
+					const d = document.createElement('div');
+					d.className = 'menu-divider';
+					pop.appendChild(d);
+					continue;
+				}
+				const b = document.createElement('button');
+				b.type = 'button';
+				b.className = 'menu-item' + (it.danger ? ' danger' : '');
+				b.setAttribute('role', 'menuitem');
+				b.disabled = isRunning;
+				const tagHtml = it.tag ? '<span class="mi-tag">' + it.tag + '</span>' : '';
+				b.innerHTML = '<span>' + it.label + '</span>' + tagHtml;
+				b.onclick = function() {
+					closeKebab();
+					if (it.action === 'reset') showResetConfirm();
+					else runAction(it.action);
+				};
+				pop.appendChild(b);
+			}
+		}
+
+		async function copyCode() {
+			const code = document.getElementById('deviceCode').textContent.trim();
+			if (!code || code === '------') return;
+			const lbl = document.getElementById('btnCopyLabel');
+			const prev = lbl.textContent;
+			try {
+				await navigator.clipboard.writeText(code);
+			} catch (e) {
+				try {
+					const r = document.createRange();
+					r.selectNodeContents(document.getElementById('deviceCode'));
+					const sel = window.getSelection();
+					sel.removeAllRanges();
+					sel.addRange(r);
+					document.execCommand('copy');
+					sel.removeAllRanges();
+				} catch (e2) {
+					lbl.textContent = '복사 실패';
+					setTimeout(function() { lbl.textContent = prev; }, 1200);
+					return;
+				}
+			}
+			lbl.textContent = '복사됨';
+			setTimeout(function() { lbl.textContent = prev; }, 1200);
+		}
+
+		let primaryAction = null;
+		function onPrimaryClick() {
+			if (!primaryAction) return;
+			runAction(primaryAction);
 		}
 
 		function render(data) {
 			if (redirecting) return;
 
-			// 닫기 신호
 			if (data.closePopup) {
 				redirecting = true;
 				document.getElementById('mainContent').style.display = 'none';
@@ -1182,84 +1466,132 @@ function renderAuthorizePage(session) {
 				cs.classList.add('visible');
 				document.getElementById('closeTitle').textContent = data.closeMessage || '완료';
 				document.getElementById('closeSub').textContent = '이 창을 닫아도 됩니다.';
-				setTimeout(() => {
-					try { window.close(); } catch(e) {}
-				}, 2500);
+				setTimeout(function() { try { window.close(); } catch(e) {} }, 2500);
 				return;
 			}
 
-			// OAuth 리다이렉트 (로그인 완료)
 			if (data.callbackUrl) {
 				redirecting = true;
 				window.location.href = data.callbackUrl;
 				return;
 			}
 
-			const st = statusConfig(data.status);
+			const status = data.status || 'idle';
+			const cfg = statusConfig(status);
+			const isRunning = Boolean(data.currentlyRunning);
 
-			// 상태 배너
-			const banner = document.getElementById('statusBanner');
-			banner.className = 'status-banner ' + st.cls;
-			document.getElementById('statusIcon').textContent = st.icon;
-			document.getElementById('statusLabel').textContent = st.label;
-
-			// sub 텍스트: 진행 중일 때는 message 사용
-			const isActive = ['pending'].includes(data.status);
-			document.getElementById('statusSub').textContent = isActive
-				? fv(data.message, st.sub)
-				: (data.email ? data.email : st.sub);
+			// 상태
+			const ind = document.getElementById('statusIndicator');
+			ind.className = 'indicator' + (cfg.tone ? ' ' + cfg.tone : '');
+			document.getElementById('statusLabel').textContent = cfg.label;
+			const subEl = document.getElementById('statusSub');
+			if (status === 'pending') {
+				subEl.textContent = fv(data.message, cfg.sub);
+			} else if (data.email && (status === 'connected' || status === 'needs_reconnect')) {
+				subEl.textContent = data.email;
+			} else {
+				subEl.textContent = cfg.sub;
+			}
 
 			// 계정 정보
-			const hasAccount = Boolean(data.email || data.accountHint || data.workspaceHint);
-			const acctInfo = document.getElementById('accountInfo');
-			acctInfo.style.display = hasAccount ? 'grid' : 'none';
-			if (hasAccount) {
+			const hasAccount = Boolean(data.email || data.accountHint || data.workspaceHint || data.profileKey);
+			const showAccount = hasAccount && (status === 'connected' || status === 'needs_reconnect');
+			const accountInfo = document.getElementById('accountInfo');
+			accountInfo.classList.toggle('hidden', !showAccount);
+			if (showAccount) {
 				document.getElementById('infoEmail').textContent = fv(data.email || data.accountHint);
-				document.getElementById('infoWorkspace').textContent = fv(data.workspaceHint);
+				document.getElementById('infoWorkspace').textContent = fv(data.workspaceHint || data.planType);
 				document.getElementById('infoLastLogin').textContent = fv(data.lastLoginAt);
 				document.getElementById('infoProfileKey').textContent = fv(data.profileKey);
 			}
 
-			// Device Code 박스
-			const hasDevice = Boolean(data.verificationUrl || data.userCode);
+			// Device code
+			const hasDevice = Boolean(data.verificationUrl || data.userCode) && status === 'pending';
 			const devBox = document.getElementById('deviceBox');
-			devBox.style.display = hasDevice ? 'block' : 'none';
+			devBox.classList.toggle('hidden', !hasDevice);
 			if (hasDevice) {
-				document.getElementById('deviceCode').textContent = fv(data.userCode);
-				const urlEl = document.getElementById('deviceUrl');
-				urlEl.href = data.verificationUrl || '#';
-				urlEl.textContent = data.verificationUrl ? '인증 페이지 열기 →' : '-';
-				if (!logVisible) toggleLog();
+				document.getElementById('deviceCode').textContent = fv(data.userCode, '------');
+				const ref = document.getElementById('deviceUrlRef');
+				const url = data.verificationUrl || '';
+				try {
+					const parsed = new URL(url);
+					ref.textContent = parsed.host + parsed.pathname;
+				} catch { ref.textContent = url || '-'; }
+				const openBtn = document.getElementById('btnOpenUrl');
+				openBtn.href = url || '#';
+				openBtn.classList.toggle('hidden', !url);
 			}
 
-			// 버튼 그룹
-			const isConnected = data.status === 'connected';
-			const isRunning = Boolean(data.currentlyRunning);
-			document.getElementById('btnGroupConnected').style.display = (isConnected && !isRunning) ? 'flex' : 'none';
-			document.getElementById('btnGroupDisconnected').style.display = (!isConnected && !isRunning) ? 'flex' : 'none';
-			// 상태가 바뀌면 초기화 확인창 자동으로 닫기
-			if (!isConnected) hideResetConfirm();
+			// 주요 액션 버튼 + hint + error
+			const primary = document.getElementById('primaryActions');
+			const primaryBtn = document.getElementById('primaryBtn');
+			const hintText = document.getElementById('hintText');
+			const inlineErr = document.getElementById('inlineErr');
+
+			primary.classList.add('hidden');
+			hintText.classList.add('hidden');
+			inlineErr.classList.add('hidden');
+
+			primaryBtn.classList.remove('primary');
+			primaryBtn.disabled = isRunning;
+
+			if (status === 'connected') {
+				primary.classList.remove('hidden');
+				primaryBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8a6 6 0 0 1 10.2-4.3L14 5"/><path d="M14 2v3h-3"/><path d="M14 8a6 6 0 0 1-10.2 4.3L2 11"/><path d="M2 14v-3h3"/></svg><span>상태 새로고침</span>';
+				primaryAction = 'refresh';
+			} else if (status === 'needs_reconnect') {
+				primary.classList.remove('hidden');
+				primaryBtn.classList.add('primary');
+				primaryBtn.innerHTML = '<span>↺ 재로그인 (Device Code)</span>';
+				primaryAction = 'device';
+			} else if (status === 'disconnected' || status === 'idle') {
+				primary.classList.remove('hidden');
+				primaryBtn.classList.add('primary');
+				primaryBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="11" r="3"/><path d="M7.1 8.9L14 2"/><path d="M11 5l2 2"/></svg><span>Device Code로 연결</span>';
+				primaryAction = 'device';
+				hintText.classList.remove('hidden');
+				hintText.textContent = '다른 기기에서 코드를 입력해 로그인합니다. 가장 안전한 방법입니다.';
+			} else if (status === 'error') {
+				primary.classList.remove('hidden');
+				primaryBtn.classList.add('primary');
+				primaryBtn.innerHTML = '<span>↻ 다시 시도</span>';
+				primaryAction = 'device';
+				inlineErr.classList.remove('hidden');
+				document.getElementById('errMsg').textContent = fv(data.lastError || data.message, '다시 시도하거나 인증 캐시를 초기화해 보세요.');
+			}
+
+			// Kebab 메뉴 재생성
+			buildKebabMenu(status, isRunning);
+
+			// pending 상태에서는 초기화 확인창 자동으로 닫기
+			if (status === 'pending') hideResetConfirm();
 
 			// 로그
 			const logs = data.logs && data.logs.length ? data.logs.join('\\n') : '';
+			const logsEl = document.getElementById('logOutput');
+			const detailsEl = document.getElementById('logsDetails');
 			if (logs) {
-				document.getElementById('logOutput').textContent = logs;
-				if (isActive && !logVisible) toggleLog();
+				logsEl.textContent = logs;
+				if (status === 'pending' || status === 'error') detailsEl.open = true;
 			}
 		}
 
 		function showResetConfirm() {
 			if (busy || redirecting) return;
-			document.getElementById('resetConfirm').style.display = 'block';
+			document.getElementById('resetConfirm').classList.remove('hidden');
 		}
-
 		function hideResetConfirm() {
-			document.getElementById('resetConfirm').style.display = 'none';
+			document.getElementById('resetConfirm').classList.add('hidden');
 		}
-
 		function doReset() {
 			hideResetConfirm();
 			runAction('purge');
+		}
+
+		function setBusy(v) {
+			busy = v;
+			const pb = document.getElementById('primaryBtn');
+			if (pb) pb.disabled = v;
 		}
 
 		async function fetchState() {
@@ -1280,11 +1612,11 @@ function renderAuthorizePage(session) {
 			if (busy || redirecting) return;
 			setBusy(true);
 			const endpoint = {
-				device:    '/oauth/device/start',
-				browser:   '/oauth/browser/start',
-				refresh:   '/oauth/refresh',
-				disconnect:'/oauth/disconnect',
-				purge:     '/oauth/purge',
+				device:     '/oauth/device/start',
+				browser:    '/oauth/browser/start',
+				refresh:    '/oauth/refresh',
+				disconnect: '/oauth/disconnect',
+				purge:      '/oauth/purge',
 			}[action];
 			if (!endpoint) { setBusy(false); return; }
 			try {
