@@ -157,7 +157,7 @@ function escapeRegExp(value) {
 }
 
 function resolveCodexExecutable(codexExecutable) {
-	return (
+	const resolved = (
 		String(
 			codexExecutable ||
 				process.env.CODEX_BINARY_PATH ||
@@ -165,6 +165,12 @@ function resolveCodexExecutable(codexExecutable) {
 				"codex",
 		).trim() || "codex"
 	);
+	if (/[;&|`$(){}]/.test(resolved)) {
+		throw new Error(
+			`Codex 실행 파일 경로에 허용되지 않는 문자가 포함되어 있습니다: "${resolved}"`,
+		);
+	}
+	return resolved;
 }
 
 function shouldUseShellForCommand(command) {

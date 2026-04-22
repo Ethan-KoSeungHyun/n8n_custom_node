@@ -227,18 +227,34 @@ function buildServerConfig(context, itemIndex) {
 	};
 
 	if (serverSource === "http") {
+		const bearerTokenEnvVar = String(
+			context.getNodeParameter("bearerTokenEnvVar", itemIndex, ""),
+		).trim();
+		if (bearerTokenEnvVar && /^(N8N_|GITHUB_|.*SECRET|.*PASSWORD|.*TOKEN$)/i.test(bearerTokenEnvVar)) {
+			throw new NodeOperationError(
+				context.getNode(),
+				`Bearer Token 환경변수 이름으로 민감한 이름("${bearerTokenEnvVar}")을 사용할 수 없습니다.`,
+				{ itemIndex },
+			);
+		}
 		return {
 			...base,
 			serverUrl: context.getNodeParameter("serverUrl", itemIndex, ""),
-			bearerTokenEnvVar: context.getNodeParameter(
-				"bearerTokenEnvVar",
-				itemIndex,
-				"",
-			),
+			bearerTokenEnvVar,
 		};
 	}
 
 	if (serverSource === "stdio") {
+		const stdioCommand = String(
+			context.getNodeParameter("stdioCommand", itemIndex, ""),
+		).trim();
+		if (stdioCommand && /[;&|`$(){}]/.test(stdioCommand)) {
+			throw new NodeOperationError(
+				context.getNode(),
+				`stdio 명령어에 허용되지 않는 문자가 포함되어 있습니다: "${stdioCommand}"`,
+				{ itemIndex },
+			);
+		}
 		const stdioArgs = parseOptionalJsonArray(
 			context.getNodeParameter("stdioArgsJson", itemIndex, ""),
 			"Arguments JSON",
@@ -247,9 +263,21 @@ function buildServerConfig(context, itemIndex) {
 			context.getNodeParameter("commandEnvJson", itemIndex, ""),
 			"Command Env JSON",
 		);
+		const DANGEROUS_ENV_KEYS = /^(LD_PRELOAD|DYLD_INSERT_LIBRARIES|LD_LIBRARY_PATH|PATH|NODE_OPTIONS)$/i;
+		if (commandEnv) {
+			for (const key of Object.keys(commandEnv)) {
+				if (DANGEROUS_ENV_KEYS.test(key)) {
+					throw new NodeOperationError(
+						context.getNode(),
+						`Command Env에 위험한 키("${key}")는 사용할 수 없습니다.`,
+						{ itemIndex },
+					);
+				}
+			}
+		}
 		return {
 			...base,
-			stdioCommand: context.getNodeParameter("stdioCommand", itemIndex, ""),
+			stdioCommand,
 			stdioArgs,
 			commandEnv,
 		};

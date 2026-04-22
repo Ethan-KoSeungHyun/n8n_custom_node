@@ -153,8 +153,27 @@ async function getBaseNodeContext(context, itemIndex) {
 		context.getNodeParameter("extraEnvJson", itemIndex, ""),
 		"Extra Environment JSON",
 	);
+
+	// Security: only pass safe environment variables to Codex SDK child process
+	// Sensitive keys (GITHUB_TOKEN, N8N_ENCRYPTION_KEY, N8N_API, etc.) are excluded.
+	const ALLOWED_ENV_PREFIXES = ["CODEX_", "NODE_"];
+	const ALLOWED_ENV_KEYS = new Set([
+		"PATH", "HOME", "USER", "LANG", "LC_ALL", "TZ",
+		"TERM", "SHELL", "TMPDIR", "XDG_RUNTIME_DIR",
+		"NODE_PATH", "NODE_ENV",
+		// Windows-specific (required for child process spawning and SDK operation)
+		"APPDATA", "LOCALAPPDATA", "USERPROFILE", "COMSPEC", "PATHEXT",
+		"TEMP", "TMP", "WINDIR", "SystemRoot", "OS",
+	]);
+	const filteredEnv = Object.fromEntries(
+		Object.entries(process.env).filter(
+			([k]) =>
+				ALLOWED_ENV_KEYS.has(k) ||
+				ALLOWED_ENV_PREFIXES.some((p) => k.startsWith(p)),
+		),
+	);
 	const env = {
-		...process.env,
+		...filteredEnv,
 		...stringifyObjectValues(extraEnv),
 		CODEX_HOME: codexHome,
 	};

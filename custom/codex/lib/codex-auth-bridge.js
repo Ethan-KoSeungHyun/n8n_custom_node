@@ -33,6 +33,9 @@ const LOG_LINE_LIMIT = 200;
 const authSessions = new Map();
 const authCodes = new Map();
 
+const BRIDGE_CLIENT_SECRET =
+	process.env.CODEX_AUTH_BRIDGE_SECRET || crypto.randomBytes(32).toString("hex");
+
 let serverPromise;
 let cleanupStarted = false;
 
@@ -209,9 +212,26 @@ async function probeExistingBridge() {
 	}
 }
 
+function isOriginAllowed(req) {
+	const origin = String(req.headers.origin || req.headers.referer || "").trim();
+	if (!origin) return true; // allow non-browser clients (n8n internal calls)
+	const allowed = [
+		"http://localhost",
+		"https://n8n.seunghyun.space",
+		"https://codex-bridge.seunghyun.space",
+	];
+	return allowed.some((prefix) => origin.startsWith(prefix));
+}
+
 async function handleRequest(req, res) {
 	const url = new URL(req.url, getBridgeBaseUrl());
 	const method = String(req.method || "GET").toUpperCase();
+
+	// CSRF protection: block POST requests from unknown origins
+	if (method === "POST" && !isOriginAllowed(req)) {
+		writeJson(res, 403, { error: "forbidden", error_description: "Origin not allowed" });
+		return;
+	}
 
 	if (method === "GET" && url.pathname === "/health") {
 		writeJson(res, 200, {
@@ -385,7 +405,7 @@ async function getOrCreateSession(searchParams, options = {}) {
 			state,
 			redirectUri,
 			clientId: String(searchParams.get("client_id") || "").trim(),
-			clientSecret: "codex-local-secret",
+			clientSecret: BRIDGE_CLIENT_SECRET,
 			profileKey,
 			codexExecutable,
 			status: "idle",
@@ -826,18 +846,26 @@ function cleanupExpiredEntries() {
 	}
 }
 
+const SECURITY_HEADERS = {
+	"x-frame-options": "DENY",
+	"x-content-type-options": "nosniff",
+	"content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+	"referrer-policy": "strict-origin-when-cross-origin",
+	"cache-control": "no-store",
+};
+
 function writeJson(res, statusCode, payload) {
 	res.writeHead(statusCode, {
+		...SECURITY_HEADERS,
 		"content-type": "application/json; charset=utf-8",
-		"cache-control": "no-store",
 	});
 	res.end(JSON.stringify(payload));
 }
 
 function writeHtml(res, statusCode, html) {
 	res.writeHead(statusCode, {
+		...SECURITY_HEADERS,
 		"content-type": "text/html; charset=utf-8",
-		"cache-control": "no-store",
 	});
 	res.end(html);
 }
