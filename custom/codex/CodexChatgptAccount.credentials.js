@@ -138,7 +138,7 @@ class CodexChatgptAccount {
 			type: "hidden",
 			required: true,
 			default:
-				'={{($self["bridgeEnvironment"] === "remote" ? ($self["remoteBridgeUrl"] || $env.CODEX_AUTH_BRIDGE_BASE_URL || "https://codex-bridge.seunghyun.space") : ($self["bridgeBaseUrl"] || ("http://localhost:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481")))).replace(/\\/$/, "") + "/oauth/authorize"}}',
+				'={{($self["bridgeEnvironment"] === "remote" ? ($self["remoteBridgeUrl"] || "https://codex-bridge.seunghyun.space") : ($self["bridgeBaseUrl"] || "http://localhost:3481")).replace(/\\/$/, "") + "/oauth/authorize"}}',
 		},
 		{
 			displayName: "Access Token URL",
@@ -146,7 +146,7 @@ class CodexChatgptAccount {
 			type: "hidden",
 			required: true,
 			default:
-				'={{($self["bridgeEnvironment"] === "remote" ? ($self["remoteBridgeUrl"] || $env.CODEX_AUTH_BRIDGE_BASE_URL || "https://codex-bridge.seunghyun.space") : ($self["bridgeBaseUrl"] || ("http://localhost:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481")))).replace(/\\/$/, "") + "/oauth/token"}}',
+				'={{($self["bridgeEnvironment"] === "remote" ? ($self["remoteBridgeUrl"] || "https://codex-bridge.seunghyun.space") : ($self["bridgeBaseUrl"] || "http://localhost:3481")).replace(/\\/$/, "") + "/oauth/token"}}',
 		},
 		{
 			displayName: "Client ID",
@@ -195,7 +195,7 @@ class CodexChatgptAccount {
 	test = {
 		request: {
 			baseURL:
-				'={{($credentials.bridgeEnvironment === "remote" ? ($credentials.remoteBridgeUrl || $env.CODEX_AUTH_BRIDGE_BASE_URL || "https://codex-bridge.seunghyun.space") : ($credentials.bridgeBaseUrl || ("http://localhost:" + ($env.CODEX_AUTH_BRIDGE_PORT || "3481")))).replace(/\\/$/, "")}}',
+				'={{($credentials.bridgeEnvironment === "remote" ? ($credentials.remoteBridgeUrl || "https://codex-bridge.seunghyun.space") : ($credentials.bridgeBaseUrl || "http://localhost:3481")).replace(/\\/$/, "")}}',
 			url:
 				'={{"/oauth/status?profileKey=" + encodeURIComponent((($credentials.oauthTokenData || {})["profile_key"]) || "") + "&codexExecutable=" + encodeURIComponent($credentials.codexExecutable || "")}}',
 			ignoreHttpStatusErrors: true,
