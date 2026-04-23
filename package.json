@@ -8,7 +8,6 @@
   },
   "scripts": {
     "verify": "node ./scripts/verify-codex-nodes.mjs",
-    "verify:codex-facts": "node ./scripts/verify-codex-facts.mjs",
     "mcp:smoke:stdio": "node ./custom/codex/scripts/mcp-smoke-stdio-server.mjs"
   },
   "dependencies": {
