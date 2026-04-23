@@ -1,0 +1,58 @@
+{
+  "id": "Gqczr6QlkyGFIaox",
+  "name": "[Test V1] Agent Registry",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-registry",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-reg",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        272,
+        304
+      ],
+      "webhookId": "8ed69997-2166-42d1-9b52-737f0c652869"
+    },
+    {
+      "parameters": {},
+      "id": "registry-node",
+      "name": "Codex Agent Registry",
+      "type": "CUSTOM.codexAgentRegistry",
+      "typeVersion": 1,
+      "position": [
+        480,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Codex Agent Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "tags": []
+}

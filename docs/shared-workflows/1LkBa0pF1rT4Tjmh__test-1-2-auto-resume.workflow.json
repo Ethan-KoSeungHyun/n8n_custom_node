@@ -1,0 +1,70 @@
+{
+  "id": "1LkBa0pF1rT4Tjmh",
+  "name": "[Test 1-2] Auto Resume",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-codex-1-2",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "wh-1-2",
+      "name": "Webhook",
+      "webhookId": "test-codex-1-2"
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.body.prompt }}",
+        "sessionStrategy": "autoResume",
+        "sessionId": "={{ $json.body.sessionId }}",
+        "modelPreset": "gpt-5.4-mini",
+        "fullAuto": true,
+        "skipGitRepoCheck": true
+      },
+      "type": "CUSTOM.codexAgent",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "id": "agent-1-2",
+      "name": "Codex Agent",
+      "credentials": {
+        "codexChatgptAccount": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Codex ChatGPT Account account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": null,
+  "tags": []
+}

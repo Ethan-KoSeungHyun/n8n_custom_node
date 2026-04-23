@@ -1,0 +1,73 @@
+{
+  "id": "QQ5xuSNziujIw1Hr",
+  "name": "[Test 1-3~1-5] Sessions & SysInstructions",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-codex-1-345",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "wh-345",
+      "name": "Webhook",
+      "webhookId": "test-codex-1-345"
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.body.prompt }}",
+        "sessionStrategy": "={{ $json.body.strategy }}",
+        "sessionId": "={{ $json.body.sessionId }}",
+        "threadId": "={{ $json.body.threadId }}",
+        "systemInstructions": "={{ $json.body.systemInstructions || '' }}",
+        "modelPreset": "gpt-5.4-mini",
+        "fullAuto": true,
+        "skipGitRepoCheck": true,
+        "parseFinalResponseAsJson": "={{ $json.body.parseJson || false }}"
+      },
+      "type": "CUSTOM.codexAgent",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "id": "agent-345",
+      "name": "Codex Agent",
+      "credentials": {
+        "codexChatgptAccount": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Codex ChatGPT Account account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": null,
+  "tags": []
+}

@@ -1,0 +1,104 @@
+{
+  "id": "MEMORY_TEST_01",
+  "name": "[Test 3-1] Memory + Agent",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "test-memory-31",
+        "responseMode": "lastNode",
+        "options": {},
+        "httpMethod": "POST"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "wh-mem-31",
+      "name": "Webhook",
+      "webhookId": "test-memory-31"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "v2-test-session",
+        "mirrorTranscript": true,
+        "contextWindowLength": 5,
+        "enablePersistentMemory": true,
+        "memoryScope": "session",
+        "memoryCategoryFilter": "",
+        "minRelevanceScore": 0.3,
+        "autoSaveMemories": true
+      },
+      "type": "CUSTOM.codexMemory",
+      "typeVersion": 1,
+      "position": [
+        440,
+        450
+      ],
+      "id": "mem-31",
+      "name": "Codex Memory"
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.body.prompt }}",
+        "sessionStrategy": "alwaysNew",
+        "sessionId": "test-mem-session-001",
+        "modelPreset": "gpt-5.4-mini",
+        "fullAuto": true,
+        "skipGitRepoCheck": true,
+        "includeEvents": true,
+        "streaming": true
+      },
+      "type": "CUSTOM.codexAgent",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ],
+      "id": "agent-mem-31",
+      "name": "Codex Agent",
+      "credentials": {
+        "codexChatgptAccount": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Codex ChatGPT Account account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Codex Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": null,
+  "tags": []
+}

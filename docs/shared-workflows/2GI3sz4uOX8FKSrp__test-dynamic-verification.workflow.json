@@ -1,0 +1,98 @@
+{
+  "id": "2GI3sz4uOX8FKSrp",
+  "name": "[TEST] Dynamic Verification",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "codex-dynamic-test",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        400,
+        300
+      ],
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "webhookId": "codex-dynamic-test-001"
+    },
+    {
+      "parameters": {
+        "prompt": "={{ $json.body.prompt }}",
+        "systemInstructions": "짧게 한 문장으로만 답하세요.",
+        "modelPreset": "gpt-5.4-mini",
+        "sessionStrategy": "alwaysNew",
+        "sandbox": "danger-full-access",
+        "fullAuto": true,
+        "skipGitRepoCheck": true,
+        "streaming": true,
+        "sessionId": ""
+      },
+      "type": "CUSTOM.codexAgent",
+      "typeVersion": 1,
+      "position": [
+        700,
+        300
+      ],
+      "id": "codex-agent-test",
+      "name": "Codex Agent",
+      "credentials": {
+        "codexChatgptAccount": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Codex ChatGPT Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "dynamic-test-session"
+      },
+      "type": "CUSTOM.codexMemory",
+      "typeVersion": 1,
+      "position": [
+        700,
+        520
+      ],
+      "id": "codex-memory-test",
+      "name": "Codex Memory"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Codex Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": null,
+  "tags": []
+}

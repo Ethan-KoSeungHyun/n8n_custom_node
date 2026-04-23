@@ -1,0 +1,70 @@
+{
+  "id": "k6rDUnTzevo1qreq",
+  "name": "[Test 1-1] CodexAgent Basic",
+  "description": null,
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "test-codex-1-1",
+        "responseMode": "lastNode",
+        "options": {},
+        "httpMethod": "POST"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "t1-webhook",
+      "name": "Webhook",
+      "webhookId": "test-codex-1-1"
+    },
+    {
+      "parameters": {
+        "prompt": "2 더하기 3을 계산해. 숫자만 답해.",
+        "sessionStrategy": "alwaysNew",
+        "modelPreset": "gpt-5.4-mini",
+        "fullAuto": true,
+        "skipGitRepoCheck": true,
+        "includeEvents": false
+      },
+      "type": "CUSTOM.codexAgent",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "id": "t1-agent",
+      "name": "Codex Agent",
+      "credentials": {
+        "codexChatgptAccount": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Codex ChatGPT Account account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Codex Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "pinData": null,
+  "tags": []
+}
