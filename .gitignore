@@ -10,6 +10,7 @@ logs/
 tmp/
 /scripts/*
 !/scripts/verify-codex-nodes.mjs
+!/scripts/verify-codex-facts.mjs
 /workflow/
 
 # Workspace-local Codex state
